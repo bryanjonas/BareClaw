@@ -160,7 +160,7 @@ bootstrap_agent: default  # optional; defaults to app's default_agent
 
 **`secrets/<id>.yaml`** (always gitignored — flat key/value):
 ```yaml
-token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+token: "your-token-here"
 ```
 The filename must match the superpower `id`. Consider `chmod 600 secrets/<id>.yaml`.
 

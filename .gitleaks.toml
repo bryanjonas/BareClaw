@@ -1,0 +1,13 @@
+title = "Bareclaw Gitleaks Config"
+
+[allowlist]
+description = "Allowlist for example/placeholder values in documentation"
+
+# The JWT header prefix eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 was used as a
+# documentation example in CLAUDE.md and README.md. It is not a real token.
+# Historical commits already contain this value so it must be allowlisted here.
+commits = [
+  "5aec5a21cc367a97153d063dbfc23dbafe3079fc",
+  "0dafcb4028f8c81cd4fa8bef9cb0f41d9f9430a5",
+  "02a28b0c9fc2df3973a8951e082b684fbd73b726",
+]

@@ -170,7 +170,7 @@ bootstrap_agent: default  # optional; defaults to app's default_agent
 
 **`secrets/<id>.yaml`** (always gitignored — flat key/value; filename must match superpower id):
 ```yaml
-token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+token: "your-token-here"
 ```
 
 Consider `chmod 600 secrets/<id>.yaml`. Placeholders like `{token}` in `bootstrap_prompt` are interpolated from the merged config + secrets at bootstrap time.
