@@ -1,0 +1,25 @@
+# Webhook configuration example.
+# Copy this file to webhooks_config/<your-id>.yaml and customise.
+# Each file registers one POST endpoint at startup.
+
+id: my-webhook
+
+# URL path for the POST endpoint.
+path: /webhooks/my-webhook
+
+# Optional HMAC-SHA256 secret for signature verification (GitHub-style).
+# When set, the request must include an X-Hub-Signature-256 header.
+# When empty, falls back to X-API-Key header (same value as config.yaml api_key).
+secret: ""
+
+# Agent to process the incoming payload (must match an id in agents/).
+agent: default
+
+# Jinja2 template for the prompt sent to the agent.
+# {{ body }} is replaced with the raw request body (string).
+prompt_template: |
+  An external event was received with the following payload:
+
+  {{ body }}
+
+  Summarize what happened and determine if any follow-up action is needed.

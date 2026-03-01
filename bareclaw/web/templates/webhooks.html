@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Webhooks — Bareclaw{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <h1>Webhooks</h1>
+</div>
+
+<div class="card">
+  <h2>Registered Endpoints</h2>
+  {% if webhooks %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Path</th>
+        <th>Agent</th>
+        <th>HMAC Secret</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for wh in webhooks %}
+      <tr>
+        <td><code>{{ wh.id }}</code></td>
+        <td><code>{{ wh.path }}</code></td>
+        <td><code>{{ wh.agent }}</code></td>
+        <td>
+          {% if wh.secret %}
+          <span class="badge badge-ok">set</span>
+          {% else %}
+          <span class="muted">none</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No webhooks configured. Add YAML files to the <code>webhooks_config/</code> directory.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="section-header" style="margin-bottom:.75rem;">
+    <h2>Call History</h2>
+    <button class="primary" onclick="refreshRuns()" style="margin-left:auto;padding:.3rem .7rem;font-size:12px;">Refresh</button>
+  </div>
+  <div id="runs-container">
+    {% if runs %}
+    <table>
+      <thead>
+        <tr>
+          <th>Webhook ID</th>
+          <th>Received At</th>
+          <th>Payload</th>
+          <th>LLM Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td><code>{{ run.webhook_id }}</code></td>
+          <td><span class="muted">{{ run.received_at }}</span></td>
+          <td>
+            <div class="truncate" style="max-width:260px;" title="{{ run.payload }}">
+              <code>{{ run.payload or '—' }}</code>
+            </div>
+          </td>
+          <td>
+            <div class="truncate" style="max-width:340px;" title="{{ run.llm_response }}">
+              {{ run.llm_response or '—' }}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No webhook calls yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+async function refreshRuns() {
+  const resp = await fetch("/api/webhook-runs?limit=100");
+  const runs = await resp.json();
+  const container = document.getElementById("runs-container");
+
+  if (!runs.length) {
+    container.innerHTML = '<p class="muted">No webhook calls yet.</p>';
+    return;
+  }
+
+  const rows = runs.map(r => `
+    <tr>
+      <td><code>${e(r.webhook_id)}</code></td>
+      <td><span class="muted">${e(r.received_at)}</span></td>
+      <td><div class="truncate" style="max-width:260px;"><code>${e(r.payload || '—')}</code></div></td>
+      <td><div class="truncate" style="max-width:340px;">${e(r.llm_response || '—')}</div></td>
+    </tr>
+  `).join("");
+
+  container.innerHTML = `
+    <table>
+      <thead><tr><th>Webhook ID</th><th>Received At</th><th>Payload</th><th>LLM Response</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function e(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+</script>
+{% endblock %}

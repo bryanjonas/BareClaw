@@ -1,0 +1,12 @@
+data/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+workspace/
+*.egg-info/
+.env
+CLAUDE.md

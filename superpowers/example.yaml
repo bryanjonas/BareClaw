@@ -1,0 +1,44 @@
+# Superpower configuration example.
+# Copy this file to superpowers/<your-id>.yaml and customise.
+# Rename the id field to match the filename (without .yaml).
+#
+# Superpowers give agents structured access to external services.
+# The config block (non-secret) is safe to commit.
+# Secrets live in secrets/<id>.yaml (always gitignored).
+
+id: my-service
+
+name: "My Service"
+
+description: "A short description of what this service does."
+
+# Non-secret configuration — URLs, hostnames, port numbers, etc.
+# These values are safe to commit to version control.
+config:
+  base_url: "https://my-service.example.com"
+  port: "8080"
+
+# Keywords that trigger auto-injection of this superpower into the system prompt.
+# Case-insensitive, matched as whole words. Use specific, distinctive terms.
+keywords:
+  - my service
+  - myservice
+
+# Bootstrap prompt — sent to an agent to research and document this service.
+# Use {key} placeholders for values from config and secrets/<id>.yaml.
+# The agent will use run_command (curl, etc.) and write_memory to capture findings.
+# Leave empty to disable the Bootstrap button in the UI.
+bootstrap_prompt: |
+  Use curl to explore the API at {base_url}.
+  Auth header: Authorization: Bearer {token}
+
+  Explore the available endpoints and document:
+  - Authentication pattern
+  - Key endpoints and their parameters
+  - Common usage examples
+
+  Save your findings as a memory called 'my-service-api'.
+
+# Agent to use for bootstrapping. Leave empty to use the app's default agent.
+# The agent should have the run_command tool enabled in its YAML.
+bootstrap_agent: ""

@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Superpowers — Bareclaw{% endblock %}
+
+{% block head %}
+<style>
+  .sp-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1rem;
+  }
+  .sp-card-header {
+    display: flex;
+    align-items: baseline;
+    gap: .7rem;
+    margin-bottom: .5rem;
+  }
+  .sp-card-header h2 {
+    font-size: 15px;
+    margin: 0;
+  }
+  .sp-id {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .sp-description {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: .6rem;
+  }
+  .sp-section-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin: .6rem 0 .2rem;
+  }
+  .sp-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+  }
+  .sp-kv {
+    font-size: 12px;
+    font-family: monospace;
+  }
+  .sp-kv .key { color: var(--muted); }
+  .sp-kv .val { color: var(--fg); }
+  .sp-kv .masked { color: #888; letter-spacing: .05em; }
+  .keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-top: .2rem;
+  }
+  .kw {
+    background: #1a2a3a;
+    color: #64b5f6;
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    font-size: 11px;
+  }
+  .sp-actions {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin-top: .8rem;
+  }
+  .bootstrap-result {
+    margin-top: .6rem;
+    font-size: 12px;
+  }
+  .bootstrap-result summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    user-select: none;
+    list-style: none;
+  }
+  .bootstrap-result summary::-webkit-details-marker { display: none; }
+  .bootstrap-result summary::before { content: "▶ "; font-size: 10px; }
+  details[open] .bootstrap-result summary::before { content: "▼ "; }
+  .bootstrap-result pre {
+    margin-top: .5rem;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+  }
+  .spinner { display: none; font-size: 12px; color: var(--muted); }
+  .spinner.active { display: inline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <h1>Superpowers</h1>
+  <button class="primary" onclick="refreshAll()" style="margin-left:auto;padding:.3rem .7rem;font-size:12px;">Refresh</button>
+</div>
+
+<div id="superpowers-container">
+{% if superpowers %}
+  {% for sp in superpowers %}
+  <div class="sp-card" id="sp-{{ sp.id }}">
+    <div class="sp-card-header">
+      <h2>{{ sp.name }}</h2>
+      <span class="sp-id">{{ sp.id }}</span>
+    </div>
+    {% if sp.description %}
+    <div class="sp-description">{{ sp.description }}</div>
+    {% endif %}
+
+    {% if sp.keywords %}
+    <div class="sp-section-label">Keywords</div>
+    <div class="keyword-list">
+      {% for kw in sp.keywords %}
+      <span class="kw">{{ kw }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sp.config %}
+    <div class="sp-section-label">Config</div>
+    <div class="sp-kv-list">
+      {% for k, v in sp.config.items() %}
+      <div class="sp-kv"><span class="key">{{ k }}:</span> <span class="val">{{ v }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sp.secrets %}
+    <div class="sp-section-label">Secrets</div>
+    <div class="sp-kv-list">
+      {% for k in sp.secrets %}
+      <div class="sp-kv"><span class="key">{{ k }}:</span> <span class="masked">***</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sp.bootstrap_prompt %}
+    <div class="sp-actions">
+      <button class="primary" onclick="bootstrap('{{ sp.id }}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap</button>
+      <span class="spinner" id="spinner-{{ sp.id }}">running…</span>
+    </div>
+    <div id="result-{{ sp.id }}"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<p class="muted">No superpowers configured. Create a file in <code>superpowers/</code> to get started.</p>
+{% endif %}
+</div>
+
+<script>
+async function bootstrap(id) {
+  const spinner = document.getElementById("spinner-" + id);
+  const resultEl = document.getElementById("result-" + id);
+  spinner.classList.add("active");
+  resultEl.innerHTML = "";
+
+  try {
+    const resp = await fetch("/api/superpowers/" + encodeURIComponent(id) + "/bootstrap", {
+      method: "POST",
+    });
+    const data = await resp.json();
+    if (data.error) {
+      resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Error: ${e(data.error)}</p>`;
+    } else {
+      resultEl.innerHTML = `
+        <details class="bootstrap-result" open>
+          <summary>bootstrap result</summary>
+          <pre>${e(data.response)}</pre>
+        </details>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Request failed: ${e(String(err))}</p>`;
+  } finally {
+    spinner.classList.remove("active");
+  }
+}
+
+async function refreshAll() {
+  const resp = await fetch("/api/superpowers");
+  const superpowers = await resp.json();
+  const container = document.getElementById("superpowers-container");
+
+  if (!superpowers.length) {
+    container.innerHTML = '<p class="muted">No superpowers configured. Create a file in <code>superpowers/</code> to get started.</p>';
+    return;
+  }
+
+  container.innerHTML = superpowers.map(sp => {
+    const kws = (sp.keywords || []).map(k => `<span class="kw">${e(k)}</span>`).join(" ");
+    const cfg = Object.entries(sp.config || {}).map(([k, v]) =>
+      `<div class="sp-kv"><span class="key">${e(k)}:</span> <span class="val">${e(v)}</span></div>`
+    ).join("");
+    const sec = Object.keys(sp.secrets || {}).map(k =>
+      `<div class="sp-kv"><span class="key">${e(k)}:</span> <span class="masked">***</span></div>`
+    ).join("");
+    const bootstrapBtn = sp.has_bootstrap
+      ? `<div class="sp-actions">
+           <button class="primary" onclick="bootstrap('${e(sp.id)}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap</button>
+           <span class="spinner" id="spinner-${e(sp.id)}">running…</span>
+         </div>
+         <div id="result-${e(sp.id)}"></div>`
+      : "";
+    return `
+      <div class="sp-card" id="sp-${e(sp.id)}">
+        <div class="sp-card-header">
+          <h2>${e(sp.name)}</h2>
+          <span class="sp-id">${e(sp.id)}</span>
+        </div>
+        ${sp.description ? `<div class="sp-description">${e(sp.description)}</div>` : ""}
+        ${kws ? `<div class="sp-section-label">Keywords</div><div class="keyword-list">${kws}</div>` : ""}
+        ${cfg ? `<div class="sp-section-label">Config</div><div class="sp-kv-list">${cfg}</div>` : ""}
+        ${sec ? `<div class="sp-section-label">Secrets</div><div class="sp-kv-list">${sec}</div>` : ""}
+        ${bootstrapBtn}
+      </div>`;
+  }).join("");
+}
+
+function e(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+</script>
+{% endblock %}

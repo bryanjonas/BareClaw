@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Memories — Bareclaw{% endblock %}
+
+{% block head %}
+<style>
+  .memory-content {
+    margin-top: .5rem;
+  }
+  .memory-content summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    user-select: none;
+    list-style: none;
+  }
+  .memory-content summary::-webkit-details-marker { display: none; }
+  .memory-content summary::before { content: "▶ "; font-size: 10px; }
+  details[open] .memory-content summary::before { content: "▼ "; }
+  .memory-content pre {
+    margin-top: .5rem;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+  }
+  .keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+  }
+  .kw {
+    background: #1a2a3a;
+    color: #64b5f6;
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    font-size: 11px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <h1>Memories</h1>
+  <button class="primary" onclick="refresh()" style="margin-left:auto;padding:.3rem .7rem;font-size:12px;">Refresh</button>
+</div>
+
+<div id="memories-container">
+{% if memories %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Title</th>
+      <th>Keywords</th>
+      <th>Content</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in memories %}
+    <tr>
+      <td><code>{{ m.id }}</code></td>
+      <td>{{ m.title }}</td>
+      <td>
+        <div class="keyword-list">
+          {% for kw in m.keywords %}
+          <span class="kw">{{ kw }}</span>
+          {% endfor %}
+        </div>
+      </td>
+      <td>
+        <details class="memory-content">
+          <summary>show content</summary>
+          <pre>{{ m.content }}</pre>
+        </details>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No memories yet. Ask an agent to save something, or create a file in <code>memories/</code>.</p>
+{% endif %}
+</div>
+
+<script>
+async function refresh() {
+  const resp = await fetch("/api/memories");
+  const memories = await resp.json();
+  const container = document.getElementById("memories-container");
+
+  if (!memories.length) {
+    container.innerHTML = '<p class="muted">No memories yet. Ask an agent to save something, or create a file in <code>memories/</code>.</p>';
+    return;
+  }
+
+  const rows = memories.map(m => {
+    const kws = (m.keywords || []).map(k => `<span class="kw">${e(k)}</span>`).join(" ");
+    return `
+      <tr>
+        <td><code>${e(m.id)}</code></td>
+        <td>${e(m.title)}</td>
+        <td><div class="keyword-list">${kws}</div></td>
+        <td>
+          <details class="memory-content">
+            <summary>show content</summary>
+            <pre>${e(m.content)}</pre>
+          </details>
+        </td>
+      </tr>`;
+  }).join("");
+
+  container.innerHTML = `
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Keywords</th><th>Content</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function e(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+</script>
+{% endblock %}

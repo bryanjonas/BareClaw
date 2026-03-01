@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Bareclaw{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --border: #2a2a2a;
+      --accent: #7c6af7;
+      --accent-dim: #5549c9;
+      --text: #e0e0e0;
+      --muted: #888;
+      --success: #4caf50;
+      --error: #f44336;
+      --code-bg: #111;
+      --font: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      height: 48px;
+      flex-shrink: 0;
+    }
+
+    nav .logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--accent);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+    }
+    nav .logo img {
+      height: 22px;
+      width: auto;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    nav a:hover, nav a.active { color: var(--text); }
+
+    nav .spacer { flex: 1; }
+
+    nav form button {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: .25rem .6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+    }
+    nav form button:hover { color: var(--text); border-color: var(--muted); }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 1.2rem; color: var(--text); margin-bottom: 1rem; font-weight: 600; }
+    h2 { font-size: 1rem; color: var(--muted); margin-bottom: .75rem; font-weight: 500; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: .5rem .75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 500;
+    }
+    td {
+      padding: .5rem .75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface); }
+
+    .badge {
+      display: inline-block;
+      padding: .1rem .45rem;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .03em;
+    }
+    .badge-ok { background: #1a3a1a; color: var(--success); }
+    .badge-error { background: #3a1a1a; color: var(--error); }
+    .badge-tool { background: #1a2a3a; color: #64b5f6; }
+
+    pre, code {
+      font-family: var(--font);
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    code { padding: .1em .35em; }
+    pre { padding: .75rem; overflow-x: auto; white-space: pre-wrap; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .truncate {
+      max-width: 400px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    select, input[type="text"], input[type="password"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: .4rem .6rem;
+      border-radius: 4px;
+      font-family: var(--font);
+      font-size: 13px;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: .5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      transition: background .15s;
+    }
+    button.primary:hover { background: var(--accent-dim); }
+    button.primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .muted { color: var(--muted); }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav>
+    <a class="logo" href="/"><img src="/static/logo.svg" alt="">bareclaw</a>
+    <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>chat</a>
+    <a href="/superpowers" {% if request.url.path == '/superpowers' %}class="active"{% endif %}>superpowers</a>
+    <a href="/memories" {% if request.url.path == '/memories' %}class="active"{% endif %}>memories</a>
+    <a href="/crons" {% if request.url.path == '/crons' %}class="active"{% endif %}>crons</a>
+    <a href="/webhooks" {% if request.url.path == '/webhooks' %}class="active"{% endif %}>webhooks</a>
+    <span class="spacer"></span>
+    <form method="post" action="/logout">
+      <button type="submit">logout</button>
+    </form>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

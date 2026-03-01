@@ -1,0 +1,28 @@
+data/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.env
+
+# Personal config files — only example.yaml in each dir is committed
+agents/*.yaml
+!agents/example.yaml
+crons/*.yaml
+!crons/example.yaml
+webhooks_config/*.yaml
+!webhooks_config/example.yaml
+config.yaml
+
+# Memories — only example.yaml is committed
+memories/*.yaml
+!memories/example.yaml
+
+# Superpowers and secrets — only example.yaml is committed
+superpowers/*.yaml
+!superpowers/example.yaml
+secrets/*.yaml
+!secrets/example.yaml

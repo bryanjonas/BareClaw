@@ -1,0 +1,41 @@
+# Memory file example.
+# Copy this file to memories/<your-id>.yaml and customise.
+# This file is ignored at runtime and is the only memory committed to git.
+#
+# Memories give agents persistent, structured knowledge.
+# Relevant memories are auto-injected into the system prompt when a user
+# message contains any of the listed keywords. Agents can also use the
+# list_memories, read_memory, and write_memory tools to manage memories directly.
+
+id: example-api
+
+title: "Example Service API"
+
+# Keywords that trigger auto-injection of this memory into the system prompt.
+# Case-insensitive, matched as whole words. Use specific, distinctive terms.
+keywords:
+  - example service
+  - example api
+  - myservice
+
+# The content injected into the system prompt when this memory is relevant.
+# Use markdown for structure. Include base URLs, auth patterns, common endpoints,
+# gotchas, or any reference information the agent would otherwise need to ask about.
+content: |
+  ## Example Service API
+
+  Base URL: https://api.example.com/v1
+  Auth: Bearer token in Authorization header
+  Token: <set your token here>
+
+  ### Common endpoints
+  GET  /status          — health check
+  GET  /items           — list all items
+  POST /items           — create item (body: {"name": "...", "value": "..."})
+  PUT  /items/{id}      — update item
+  DEL  /items/{id}      — delete item
+
+  ### Notes
+  - Rate limit: 100 req/min
+  - All responses are JSON
+  - Errors return {"error": "message"} with appropriate HTTP status

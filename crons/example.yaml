@@ -1,0 +1,27 @@
+# Cron job configuration example.
+# Copy this file to crons/<your-id>.yaml and customise.
+
+id: my-cron
+
+# Standard 5-field cron expression (minute hour day month weekday).
+# Examples:
+#   "* * * * *"   — every minute
+#   "0 * * * *"   — every hour
+#   "0 9 * * 1-5" — 09:00 on weekdays
+schedule: "0 * * * *"
+
+# Agent to run (must match an id in agents/).
+agent: default
+
+# Optional shell command. Runs first; stdout+stderr are prepended to the prompt.
+# Leave empty to send the prompt directly without any command output.
+command: "df -h && free -m"
+
+# Prompt sent to the agent (after any command output).
+prompt: |
+  Analyse the output above.
+  Alert only if disk usage exceeds 80% or free memory is below 500 MB.
+  Otherwise respond with a single "OK" line.
+
+# Send the agent's response to all allowed Telegram users.
+notify_telegram: false

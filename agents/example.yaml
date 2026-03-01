@@ -1,0 +1,41 @@
+# Agent configuration example.
+# Copy this file to agents/<your-id>.yaml and customise.
+# Rename the id field to match the filename (without .yaml).
+
+id: my-agent
+name: "My Agent"
+
+# LLM provider: "ollama" (local) or "openai"
+provider: ollama
+
+# Model name as known to the provider (e.g. llama3.2, mistral, gpt-4o)
+model: llama3.2
+
+# Override the global ollama.base_url for this agent only.
+# Useful when running multiple Ollama instances.
+# Leave empty to use the global setting in config.yaml.
+ollama_base_url: ""   # e.g. http://192.168.1.50:11434
+
+system_prompt: |
+  You are a helpful assistant.
+
+# Sampling temperature (0.0 = deterministic, 1.0 = creative)
+temperature: 0.7
+
+# Directory where run_command and read_file tools are sandboxed.
+# Supports ~ expansion. Must exist on the host (or container).
+workspace: ~/workspace
+
+# Tools available to this agent. Defined in bareclaw/core/tools.py.
+# Currently supported: run_command, read_file
+#
+# Note: the following tools are always available to every agent regardless of
+# what is listed here — no need to add them:
+#   list_memories, read_memory, write_memory  (memory system)
+#   list_superpowers, read_superpower         (superpowers system)
+tools:
+  - run_command
+  - read_file
+
+# Maximum tool-calling iterations before the loop is force-stopped.
+max_iterations: 10
