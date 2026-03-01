@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Projects — Bareclaw{% endblock %}
+
+{% block head %}
+<style>
+  .proj-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1rem;
+  }
+  .proj-card-header {
+    display: flex;
+    align-items: baseline;
+    gap: .7rem;
+    margin-bottom: .5rem;
+  }
+  .proj-card-header h2 {
+    font-size: 15px;
+    margin: 0;
+  }
+  .proj-id {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .proj-description {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: .6rem;
+  }
+  .proj-section-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin: .6rem 0 .2rem;
+  }
+  .keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-top: .2rem;
+  }
+  .kw {
+    background: #1a2a3a;
+    color: #64b5f6;
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    font-size: 11px;
+  }
+  .mem-tag {
+    background: #1a2a1a;
+    color: #81c784;
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    font-size: 11px;
+    font-family: monospace;
+  }
+  .task-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-top: .3rem;
+  }
+  .task-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .7rem;
+    padding: .5rem .7rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .task-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .task-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: .15rem;
+  }
+  .task-description {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .task-actions {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-shrink: 0;
+  }
+  .task-result {
+    margin-top: .4rem;
+    font-size: 12px;
+  }
+  .task-result summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    user-select: none;
+    list-style: none;
+  }
+  .task-result summary::-webkit-details-marker { display: none; }
+  .task-result summary::before { content: "▶ "; font-size: 10px; }
+  details[open] .task-result summary::before { content: "▼ "; }
+  .task-result pre {
+    margin-top: .5rem;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+  }
+  .spinner { display: none; font-size: 12px; color: var(--muted); }
+  .spinner.active { display: inline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <h1>Projects</h1>
+  <button class="primary" onclick="refreshAll()" style="margin-left:auto;padding:.3rem .7rem;font-size:12px;">Refresh</button>
+</div>
+
+<div id="projects-container">
+{% if projects %}
+  {% for proj in projects %}
+  <div class="proj-card" id="proj-{{ proj.id }}">
+    <div class="proj-card-header">
+      <h2>{{ proj.name }}</h2>
+      <span class="proj-id">{{ proj.id }}</span>
+    </div>
+    {% if proj.description %}
+    <div class="proj-description">{{ proj.description }}</div>
+    {% endif %}
+
+    {% if proj.keywords %}
+    <div class="proj-section-label">Keywords</div>
+    <div class="keyword-list">
+      {% for kw in proj.keywords %}
+      <span class="kw">{{ kw }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if proj.memories %}
+    <div class="proj-section-label">Memories</div>
+    <div class="keyword-list">
+      {% for mem in proj.memories %}
+      <span class="mem-tag">{{ mem }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if proj.tasks %}
+    <div class="proj-section-label">Tasks</div>
+    <div class="task-list">
+      {% for task in proj.tasks %}
+      <div class="task-row">
+        <div class="task-info">
+          <div class="task-name">{{ task.name }}</div>
+          {% if task.description %}
+          <div class="task-description">{{ task.description }}</div>
+          {% endif %}
+        </div>
+        <div class="task-actions">
+          <button class="primary" onclick="runTask('{{ proj.id }}', '{{ task.id }}')" style="padding:.3rem .7rem;font-size:12px;">Run</button>
+          <span class="spinner" id="spinner-{{ proj.id }}-{{ task.id }}">running…</span>
+        </div>
+      </div>
+      <div id="result-{{ proj.id }}-{{ task.id }}"></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<p class="muted">No projects configured. Create a file in <code>projects/</code> to get started.</p>
+{% endif %}
+</div>
+
+<script>
+async function runTask(projectId, taskId) {
+  const key = projectId + "-" + taskId;
+  const spinner = document.getElementById("spinner-" + key);
+  const resultEl = document.getElementById("result-" + key);
+  spinner.classList.add("active");
+  resultEl.innerHTML = "";
+
+  try {
+    const resp = await fetch(
+      "/api/projects/" + encodeURIComponent(projectId) + "/tasks/" + encodeURIComponent(taskId) + "/run",
+      { method: "POST" }
+    );
+    const data = await resp.json();
+    if (data.error) {
+      resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Error: ${e(data.error)}</p>`;
+    } else {
+      resultEl.innerHTML = `
+        <details class="task-result" open>
+          <summary>result</summary>
+          <pre>${e(data.response)}</pre>
+        </details>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Request failed: ${e(String(err))}</p>`;
+  } finally {
+    spinner.classList.remove("active");
+  }
+}
+
+async function refreshAll() {
+  const resp = await fetch("/api/projects");
+  const projects = await resp.json();
+  const container = document.getElementById("projects-container");
+
+  if (!projects.length) {
+    container.innerHTML = '<p class="muted">No projects configured. Create a file in <code>projects/</code> to get started.</p>';
+    return;
+  }
+
+  container.innerHTML = projects.map(proj => {
+    const kws = (proj.keywords || []).map(k => `<span class="kw">${e(k)}</span>`).join(" ");
+    const mems = (proj.memories || []).map(m => `<span class="mem-tag">${e(m)}</span>`).join(" ");
+    const tasks = (proj.tasks || []).map(t => {
+      const key = e(proj.id) + "-" + e(t.id);
+      return `
+        <div class="task-row">
+          <div class="task-info">
+            <div class="task-name">${e(t.name)}</div>
+            ${t.description ? `<div class="task-description">${e(t.description)}</div>` : ""}
+          </div>
+          <div class="task-actions">
+            <button class="primary" onclick="runTask('${e(proj.id)}', '${e(t.id)}')" style="padding:.3rem .7rem;font-size:12px;">Run</button>
+            <span class="spinner" id="spinner-${key}">running…</span>
+          </div>
+        </div>
+        <div id="result-${key}"></div>`;
+    }).join("");
+
+    return `
+      <div class="proj-card" id="proj-${e(proj.id)}">
+        <div class="proj-card-header">
+          <h2>${e(proj.name)}</h2>
+          <span class="proj-id">${e(proj.id)}</span>
+        </div>
+        ${proj.description ? `<div class="proj-description">${e(proj.description)}</div>` : ""}
+        ${kws ? `<div class="proj-section-label">Keywords</div><div class="keyword-list">${kws}</div>` : ""}
+        ${mems ? `<div class="proj-section-label">Memories</div><div class="keyword-list">${mems}</div>` : ""}
+        ${tasks ? `<div class="proj-section-label">Tasks</div><div class="task-list">${tasks}</div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function e(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+</script>
+{% endblock %}

@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from bareclaw import db
 from bareclaw.config import AppConfig
 from bareclaw.core import memory as mem_mod
+from bareclaw.core import projects as proj_mod
 from bareclaw.core import superpowers as sp_mod
 from bareclaw.core.agent import LLMClients, run_agent, run_agent_stream
 from bareclaw.web.auth import RequireAuth, _is_valid
@@ -239,6 +240,63 @@ def create_router(config: AppConfig, clients: LLMClients) -> APIRouter:
             return JSONResponse({"error": f"Agent '{agent_id}' not found"}, status_code=404)
         prompt = sp_mod.interpolate(sp.bootstrap_prompt, sp)
         response, _ = await run_agent(agent, _clients, [{"role": "user", "content": prompt}])
+        return {"response": response}
+
+    # ------------------------------------------------------------------
+    # Projects
+    # ------------------------------------------------------------------
+
+    @router.get("/projects", response_class=HTMLResponse, dependencies=[Depends(require_auth)])
+    async def projects_page(request: Request):
+        return templates.TemplateResponse(
+            "projects.html",
+            {
+                "request": request,
+                "projects": proj_mod.load_all(),
+            },
+        )
+
+    @router.get("/api/projects", dependencies=[Depends(require_auth)])
+    async def api_projects():
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "keywords": p.keywords,
+                "agent": p.agent,
+                "memories": p.memories,
+                "tasks": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "description": t.description,
+                        "agent": t.agent,
+                    }
+                    for t in p.tasks
+                ],
+            }
+            for p in proj_mod.load_all()
+        ]
+
+    @router.post(
+        "/api/projects/{project_id}/tasks/{task_id}/run",
+        dependencies=[Depends(require_auth)],
+    )
+    async def api_run_task(project_id: str, task_id: str):
+        proj = proj_mod.load_one(project_id)
+        if not proj:
+            return JSONResponse({"error": f"Project '{project_id}' not found"}, status_code=404)
+        task = next((t for t in proj.tasks if t.id == task_id), None)
+        if not task:
+            return JSONResponse({"error": f"Task '{task_id}' not found"}, status_code=404)
+        if not task.prompt:
+            return JSONResponse({"error": "Task has no prompt defined"}, status_code=400)
+        agent_id = task.agent or proj.agent or _config.default_agent
+        agent = _config.agents.get(agent_id)
+        if not agent:
+            return JSONResponse({"error": f"Agent '{agent_id}' not found"}, status_code=404)
+        response, _ = await run_agent(agent, _clients, [{"role": "user", "content": task.prompt}])
         return {"response": response}
 
     return router

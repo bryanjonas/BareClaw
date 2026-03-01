@@ -184,12 +184,51 @@ Consider `chmod 600 secrets/<id>.yaml`. Placeholders like `{token}` in `bootstra
 
 **Bootstrap**: clicking Bootstrap on the `/superpowers` page runs the configured agent with the interpolated `bootstrap_prompt`. The agent typically uses `run_command` (curl) and `write_memory` to document the external API into memories.
 
+### Projects (`projects/*.yaml`)
+
+Multi-component workflows the agent has explored and can execute. Each project defines named **tasks** — runnable prompts that can be triggered from the `/projects` UI. On each agent call, projects whose keywords match the conversation are automatically appended to the system prompt under `## Relevant projects`.
+
+```yaml
+id: home-network-security
+name: "Home Network Security"
+description: "Packet capture pipeline and security dashboard"
+keywords:
+  - packet capture
+  - pcap
+  - network security
+agent: default              # default agent; falls back to config.default_agent
+memories:                   # related memory IDs (informational + injected into system prompt)
+  - home-network-architecture
+tasks:
+  - id: run-pipeline
+    name: "Run Pipeline"
+    description: "Copy latest pcaps and run analysis containers"
+    prompt: |
+      Copy the latest pcap files from the router and run the analysis pipeline.
+  - id: check-dashboard
+    name: "Check Dashboard"
+    description: "Review dashboard for anomalies in the last 24h"
+    prompt: |
+      Check the security dashboard for anomalies in the last 24 hours.
+    agent: ""               # optional per-task agent override
+```
+
+Projects contain no secrets — safe to commit. Agent resolution: `task.agent → project.agent → config.default_agent`.
+
+**Project tools** (available to all agents, no YAML config needed):
+
+| Tool | Description |
+|---|---|
+| `list_projects` | Returns id, name, description for all projects |
+| `read_project(id)` | Returns full project details including tasks and prompts |
+
 ## Web UI Routes
 
 | Route | Description |
 |---|---|
 | `GET /` | Chat interface |
 | `GET /superpowers` | Superpower cards (config, secrets masked, bootstrap) |
+| `GET /projects` | Project cards with per-task Run buttons |
 | `GET /memories` | Memory browser |
 | `GET /crons` | Cron job list + run history |
 | `GET /webhooks` | Webhook list + call history |

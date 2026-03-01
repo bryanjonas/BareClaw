@@ -1,0 +1,46 @@
+# Project configuration example.
+# Copy this file to projects/<your-id>.yaml and customise.
+# Rename the id field to match the filename (without .yaml).
+#
+# Projects represent multi-component workflows the agent has explored
+# and can execute. Tasks are named runnable prompts triggered from the UI.
+# Projects are safe to commit — they contain no secrets.
+# Secrets live in superpowers/<id>.yaml + secrets/<id>.yaml.
+
+id: my-project
+
+name: "My Project"
+
+description: "A short description of what this project does and what it manages."
+
+# Keywords that trigger auto-injection of this project into the system prompt.
+# Case-insensitive, matched as whole words. Use specific, distinctive terms.
+keywords:
+  - my project
+  - myproject
+
+# Default agent to use when running tasks. Leave empty to use the app's default agent.
+# Each task can also specify its own agent override.
+agent: ""
+
+# Related memory IDs — informational reference, shown in the UI.
+# These memories are not auto-fetched; they appear in the project's system prompt injection.
+memories:
+  - my-project-architecture
+  - my-project-api
+
+# Named runnable prompts. Each task can be triggered individually from the UI.
+tasks:
+  - id: check-status
+    name: "Check Status"
+    description: "Verify all components are running and report their health."
+    prompt: |
+      Check the status of all components in my project. Report which are
+      running, any errors, and overall health.
+
+  - id: run-pipeline
+    name: "Run Pipeline"
+    description: "Execute the main data pipeline end-to-end."
+    prompt: |
+      Execute the main pipeline. Report each step's outcome and any issues.
+    agent: ""  # optional per-task agent override; empty = use project-level agent

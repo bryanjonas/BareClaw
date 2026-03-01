@@ -16,6 +16,9 @@ MEMORY_TOOL_NAMES = ["list_memories", "read_memory", "write_memory"]
 # Superpower tools are always added to every agent's tool list as well.
 SUPERPOWER_TOOL_NAMES = ["list_superpowers", "read_superpower"]
 
+# Project tools are always added to every agent's tool list as well.
+PROJECT_TOOL_NAMES = ["list_projects", "read_project"]
+
 TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "run_command": {
         "type": "function",
@@ -155,6 +158,41 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "id": {
                         "type": "string",
                         "description": "The superpower id (filename without .yaml).",
+                    }
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    "list_projects": {
+        "type": "function",
+        "function": {
+            "name": "list_projects",
+            "description": (
+                "List all configured projects with their id, name, description, and keywords. "
+                "Use this to discover what workflows and executable tasks are available."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    "read_project": {
+        "type": "function",
+        "function": {
+            "name": "read_project",
+            "description": (
+                "Read the full details of a specific project by id, including its tasks, "
+                "related memories, and runnable prompts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The project id (filename without .yaml).",
                     }
                 },
                 "required": ["id"],

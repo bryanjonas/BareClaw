@@ -31,7 +31,7 @@ ollama:
 Volumes mounted from host (edit without rebuilding):
 - `config.yaml`, `agents/`, `crons/`, `webhooks_config/` — config
 - `data/` — SQLite DB (persists across restarts)
-- `memories/`, `superpowers/`, `secrets/` — persistent knowledge + credentials
+- `memories/`, `superpowers/`, `secrets/`, `projects/` — persistent knowledge, credentials, workflows
 - `workspace/` → `/root/workspace` — agent CLI sandbox
 
 ## Architecture
@@ -175,6 +175,48 @@ The filename must match the superpower `id`. Consider `chmod 600 secrets/<id>.ya
 `superpowers/example.yaml` and `secrets/example.yaml` are committed to git; all other files in both dirs are gitignored. Both dirs are mounted as volumes in Docker.
 
 Core module: `bareclaw/core/superpowers.py` — `load_all()`, `load_one()`, `find_relevant()`, `_load_secrets()`, `interpolate()`
+
+## Projects (`projects/<id>.yaml`)
+
+Multi-component workflows the agent has explored and can execute. Each project defines named **tasks** — runnable prompts triggerable from the `/projects` UI or by agents via tools. Loaded fresh on each agent call (no restart needed). Safe to commit (no secrets).
+
+```yaml
+id: home-network-security
+name: "Home Network Security"
+description: "Packet capture pipeline and security dashboard"
+keywords:
+  - packet capture
+  - pcap
+  - network security
+agent: default              # default agent for tasks; falls back to config.default_agent
+memories:                   # related memory IDs shown in UI and injected into system prompt
+  - home-network-architecture
+  - pcap-pipeline-process
+tasks:
+  - id: run-pipeline
+    name: "Run Pipeline"
+    description: "Copy latest pcaps and run analysis containers"
+    prompt: |
+      Copy the latest pcap files from the router and run the analysis pipeline.
+  - id: check-dashboard
+    name: "Check Dashboard"
+    description: "Review dashboard for anomalies in the last 24h"
+    prompt: |
+      Check the security dashboard for anomalies in the last 24 hours.
+    agent: ""               # optional per-task agent override
+```
+
+**Auto-injection**: `_build_system_content()` keyword-matches user messages against all projects and appends matching ones under `## Relevant projects`, including task summaries and referenced memory IDs.
+
+**Task execution**: clicking Run in the `/projects` UI POSTs to `/api/projects/{id}/tasks/{task_id}/run`. Agent resolved as `task.agent → project.agent → config.default_agent`.
+
+**Tools** (always available to all agents — no YAML config needed):
+- `list_projects` — returns id, name, description for all projects
+- `read_project(id)` — returns full project details including tasks and prompts
+
+`projects/example.yaml` is the only project file committed to git; all others are gitignored.
+
+Core module: `bareclaw/core/projects.py` — `load_all()`, `load_one()`, `find_relevant()`
 
 ## Adding a New Tool
 

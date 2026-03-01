@@ -8,9 +8,10 @@ from typing import Any, AsyncIterator
 
 from bareclaw.config import AgentConfig
 from bareclaw.core import memory as mem_mod
+from bareclaw.core import projects as proj_mod
 from bareclaw.core import superpowers as sp_mod
 from bareclaw.core.llm import OllamaClient
-from bareclaw.core.tools import MEMORY_TOOL_NAMES, SUPERPOWER_TOOL_NAMES, get_tool_schemas
+from bareclaw.core.tools import MEMORY_TOOL_NAMES, PROJECT_TOOL_NAMES, SUPERPOWER_TOOL_NAMES, get_tool_schemas
 from bareclaw.executor import cli as executor
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,28 @@ def _build_system_content(agent: AgentConfig, user_messages: list[dict[str, Any]
         )
         system_content += sp_block
 
+    relevant_projs = proj_mod.find_relevant(user_text)
+    if relevant_projs:
+        proj_block = "\n\n## Relevant projects\n"
+        for proj in relevant_projs:
+            proj_block += f"\n### {proj.name}\n"
+            if proj.description:
+                proj_block += f"{proj.description}\n"
+            if proj.memories:
+                proj_block += f"Memories: {', '.join(proj.memories)}\n"
+            if proj.tasks:
+                proj_block += "Tasks:\n"
+                for t in proj.tasks:
+                    proj_block += f"- {t.id}: {t.name}"
+                    if t.description:
+                        proj_block += f" — {t.description}"
+                    proj_block += "\n"
+        logger.info(
+            "Injecting %d project(s) for agent '%s': %s",
+            len(relevant_projs), agent.id, [p.id for p in relevant_projs],
+        )
+        system_content += proj_block
+
     return system_content
 
 
@@ -134,6 +157,33 @@ def _dispatch_tool(name: str, arguments: dict[str, Any], workspace: str) -> str:
         for k, v in {**sp.config, **sp.secrets}.items():
             lines.append(f"{k}: {v}")
         return "\n".join(lines)
+    if name == "list_projects":
+        projs = proj_mod.load_all()
+        if not projs:
+            return "No projects configured."
+        return "\n".join(
+            f"- {p.id}: {p.name}" + (f" — {p.description}" if p.description else "")
+            for p in projs
+        )
+    if name == "read_project":
+        pid = arguments.get("id", "")
+        proj = proj_mod.load_one(pid)
+        if not proj:
+            return f"[error] Project '{pid}' not found."
+        lines = [f"# {proj.name}"]
+        if proj.description:
+            lines.append(proj.description)
+        if proj.memories:
+            lines.append(f"Memories: {', '.join(proj.memories)}")
+        if proj.tasks:
+            lines.append("\nTasks:")
+            for t in proj.tasks:
+                lines.append(f"- {t.id}: {t.name}")
+                if t.description:
+                    lines.append(f"  {t.description}")
+                if t.prompt:
+                    lines.append(f"  Prompt: {t.prompt.strip()}")
+        return "\n".join(lines)
     return f"[error] Unknown tool: {name}"
 
 
@@ -154,7 +204,8 @@ async def run_agent(
     ]
     tools = (get_tool_schemas(agent.tools)
              + get_tool_schemas(MEMORY_TOOL_NAMES)
-             + get_tool_schemas(SUPERPOWER_TOOL_NAMES))
+             + get_tool_schemas(SUPERPOWER_TOOL_NAMES)
+             + get_tool_schemas(PROJECT_TOOL_NAMES))
 
     for iteration in range(agent.max_iterations):
         response = await llm.chat(
@@ -213,7 +264,8 @@ async def run_agent_stream(
     ]
     tools = (get_tool_schemas(agent.tools)
              + get_tool_schemas(MEMORY_TOOL_NAMES)
-             + get_tool_schemas(SUPERPOWER_TOOL_NAMES))
+             + get_tool_schemas(SUPERPOWER_TOOL_NAMES)
+             + get_tool_schemas(PROJECT_TOOL_NAMES))
 
     for iteration in range(agent.max_iterations):
         response = await llm.chat(
