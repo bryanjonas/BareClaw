@@ -2,7 +2,7 @@
 
 <img src="logo/bareclaw-vector.svg" alt="bareclaw" height="60">
 
-A self-hosted AI agent platform that exposes a local [Ollama](https://ollama.com) model through multiple interfaces: a web chat UI, Telegram bot, HTTP webhooks, and scheduled cron jobs. Agents can autonomously run CLI commands in a restricted workspace.
+A self-hosted AI agent platform that connects to multiple LLM providers through a unified interface: web chat UI, Telegram bot, HTTP webhooks, and scheduled cron jobs. Agents can autonomously run CLI commands in a restricted workspace.
 
 ## Features
 
@@ -12,12 +12,12 @@ A self-hosted AI agent platform that exposes a local [Ollama](https://ollama.com
 - **Telegram bot** — Chat with any agent via Telegram; receive cron notifications
 - **Web UI** — Browser-based chat with streaming responses, plus dashboards for crons and webhooks
 - **CLI tool calling** — Agents can autonomously run shell commands (restricted to their workspace)
-- **Local LLM** — Powered by Ollama; no data leaves your machine
+- **Multi-provider LLM** — Pluggable provider system; run local models or connect to external APIs, per agent
 
 ## Requirements
 
 - Python 3.11+
-- [Ollama](https://ollama.com) running locally with at least one model pulled
+- At least one configured LLM provider (e.g. a local [Ollama](https://ollama.com) instance)
 
 ## Setup
 
@@ -73,7 +73,7 @@ cp agents/example.yaml agents/my-agent.yaml
 ```yaml
 id: default
 name: "Default Assistant"
-provider: ollama           # "ollama" or "openai"
+provider: ollama           # LLM provider; more coming
 model: llama3.2
 ollama_base_url: ""        # Optional: override global ollama.base_url for this agent
 system_prompt: |
