@@ -23,8 +23,10 @@ docker compose logs -f
 
 **Ollama URL**: inside the container `localhost` is the container itself. Change `config.yaml`:
 ```yaml
-ollama:
-  base_url: http://host.docker.internal:11434
+providers:
+  ollama:
+    type: ollama
+    base_url: http://host.docker.internal:11434
 ```
 `extra_hosts: host.docker.internal:host-gateway` in `docker-compose.yml` makes this work on Linux. Mac/Windows Docker Desktop handles it automatically.
 
@@ -40,7 +42,7 @@ Volumes mounted from host (edit without rebuilding):
 main.py
   └── load_config(ROOT)          # reads config.yaml + agents/ crons/ webhooks_config/
   └── db.init_db()               # SQLite at data/bareclaw.db
-  └── OllamaClient / OpenAIClient
+  └── build clients from config.providers  # OllamaClient or OpenAIClient per provider
   └── build_app(config, clients) # FastAPI + WebSocket chat + dynamic webhook routes
   └── scheduler (APScheduler)    # cron jobs → agent runs → optional Telegram notify
   └── telegram bot (optional)
@@ -48,7 +50,7 @@ main.py
 
 **Agentic loop** (`bareclaw/core/agent.py`): system prompt + messages → LLM → if tool_calls → dispatch → loop; capped by `max_iterations`.
 
-**Two LLM clients** (`bareclaw/core/llm.py`): `OllamaClient` and `OpenAIClient` both normalise to the same canonical message dict. `agent.py` is provider-agnostic; `clients["ollama"]` / `clients["openai"]` resolved from `agent.provider`.
+**Multi-provider LLM** (`bareclaw/core/llm.py`): `OllamaClient` and `OpenAIClient` both normalise to the same canonical message dict. `config.providers` is a named map; `main.py` builds one client per provider at startup. `agent.py` is provider-agnostic — it looks up `clients[agent.provider]` by id. Any number of Ollama instances, OpenAI-compatible servers (LM Studio, vLLM, llama.cpp), or the real OpenAI API can be configured simultaneously.
 
 ## Key Files
 
@@ -76,7 +78,7 @@ All loaded at startup; restart required for changes.
 ```yaml
 id: my-agent
 name: "My Agent"
-provider: ollama          # "ollama" | "openai"
+provider: ollama          # references a provider id from config.providers
 model: llama3.2
 system_prompt: |
   You are ...

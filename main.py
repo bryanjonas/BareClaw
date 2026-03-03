@@ -71,18 +71,20 @@ async def main() -> None:
     logger.info("Database ready.")
 
     # ------------------------------------------------------------------ LLM clients
-    clients: dict = {"ollama": OllamaClient(base_url=config.ollama.base_url)}
-    logger.info("Ollama client pointed at %s", config.ollama.base_url)
-
-    if config.openai.api_key:
-        clients["openai"] = OpenAIClient(
-            api_key=config.openai.api_key,
-            base_url=config.openai.base_url or None,
-        )
-        logger.info("OpenAI client configured%s.",
-                    f" (base_url={config.openai.base_url})" if config.openai.base_url else "")
-    else:
-        logger.info("OpenAI not configured — set openai.api_key in config.yaml to enable.")
+    clients: dict = {}
+    for prov in config.providers.values():
+        if prov.type == "ollama":
+            clients[prov.id] = OllamaClient(base_url=prov.base_url or "http://localhost:11434")
+            logger.info("Provider '%s' (ollama) → %s", prov.id, prov.base_url or "http://localhost:11434")
+        else:
+            clients[prov.id] = OpenAIClient(
+                api_key=prov.api_key or "ignored",
+                base_url=prov.base_url or None,
+            )
+            logger.info("Provider '%s' (openai-compatible)%s", prov.id,
+                        f" → {prov.base_url}" if prov.base_url else " → api.openai.com")
+    if not clients:
+        raise RuntimeError("No providers configured. Add at least one entry under 'providers:' in config.yaml.")
 
     # ------------------------------------------------------------------ auth
     auth_mod.init_auth(config.api_key)

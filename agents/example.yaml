@@ -5,16 +5,13 @@
 id: my-agent
 name: "My Agent"
 
-# LLM provider: "ollama" (local) or "openai"
+# LLM provider: references a provider id defined under 'providers:' in config.yaml.
+# The default config includes "ollama" and "openai". Add more providers there to
+# point agents at LM Studio, vLLM, llama.cpp, separate Ollama instances, etc.
 provider: ollama
 
-# Model name as known to the provider (e.g. llama3.2, mistral, gpt-4o)
+# Model name as known to the provider (e.g. llama3.2, mistral, gpt-4o, deepseek-coder)
 model: llama3.2
-
-# Override the global ollama.base_url for this agent only.
-# Useful when running multiple Ollama instances.
-# Leave empty to use the global setting in config.yaml.
-ollama_base_url: ""   # e.g. http://192.168.1.50:11434
 
 system_prompt: |
   You are a helpful assistant.
@@ -31,8 +28,9 @@ workspace: ~/workspace
 #
 # Note: the following tools are always available to every agent regardless of
 # what is listed here — no need to add them:
-#   list_memories, read_memory, write_memory  (memory system)
-#   list_superpowers, read_superpower         (superpowers system)
+#   list_memories, read_memory, write_memory      (memory system)
+#   list_superpowers, read_superpower             (superpowers system)
+#   list_projects, read_project                   (projects system)
 tools:
   - run_command
   - read_file

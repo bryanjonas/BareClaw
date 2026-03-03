@@ -45,8 +45,21 @@ Open http://localhost:8000 and log in with your API key.
 ### `config.yaml`
 
 ```yaml
-ollama:
-  base_url: http://localhost:11434
+# Named providers — add as many as you need.
+# type "ollama"  uses the Ollama SDK.
+# type "openai"  works with OpenAI, LM Studio, vLLM, llama.cpp, Groq, etc.
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+  openai:
+    type: openai
+    api_key: ""        # set to enable real OpenAI
+    base_url: ""       # optional: override for any OpenAI-compatible endpoint
+  # lm-studio:
+  #   type: openai
+  #   base_url: http://localhost:1234/v1
+  #   api_key: lm-studio
 
 api_key: "changeme"        # Web UI + webhook auth
 
@@ -56,6 +69,8 @@ telegram:
 
 default_agent: default
 ```
+
+Agents reference providers by id (`provider: ollama`, `provider: lm-studio`, etc.). The legacy single-provider format (`ollama:` / `openai:` top-level keys) is still accepted for backwards compatibility.
 
 ### Config file conventions
 

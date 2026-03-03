@@ -10,41 +10,26 @@ from bareclaw.config import AgentConfig
 from bareclaw.core import memory as mem_mod
 from bareclaw.core import projects as proj_mod
 from bareclaw.core import superpowers as sp_mod
-from bareclaw.core.llm import OllamaClient
 from bareclaw.core.tools import MEMORY_TOOL_NAMES, PROJECT_TOOL_NAMES, SUPERPOWER_TOOL_NAMES, get_tool_schemas
 from bareclaw.executor import cli as executor
 
 logger = logging.getLogger(__name__)
 
-# Type alias: maps provider name -> client instance (OllamaClient or OpenAIClient)
+# Type alias: maps provider id -> client instance (OllamaClient or OpenAIClient)
 LLMClients = dict[str, Any]
-
-# Cache of OllamaClients keyed by base_url for agents with ollama_base_url set
-_ollama_client_cache: dict[str, OllamaClient] = {}
 
 
 def _resolve_client(agent: AgentConfig, clients: LLMClients) -> Any:
-    # Agent-level Ollama URL overrides the global client
-    if agent.provider == "ollama" and agent.ollama_base_url:
-        url = agent.ollama_base_url
-        if url not in _ollama_client_cache:
-            logger.info("Creating OllamaClient for agent '%s' at %s", agent.id, url)
-            _ollama_client_cache[url] = OllamaClient(base_url=url)
-        return _ollama_client_cache[url]
-
     client = clients.get(agent.provider)
     if client is None:
-        fallback = clients.get("ollama")
-        if fallback is None:
-            raise RuntimeError(
-                f"No LLM client available for provider '{agent.provider}' "
-                f"and no 'ollama' fallback configured."
-            )
+        fallback_id = next(iter(clients), None)
+        if fallback_id is None:
+            raise RuntimeError("No LLM clients configured.")
         logger.warning(
-            "Provider '%s' not configured for agent '%s' — falling back to ollama.",
-            agent.provider, agent.id,
+            "Provider '%s' not found for agent '%s' — falling back to '%s'.",
+            agent.provider, agent.id, fallback_id,
         )
-        return fallback
+        return clients[fallback_id]
     return client
 
 

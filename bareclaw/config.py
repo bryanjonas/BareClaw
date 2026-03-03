@@ -3,7 +3,6 @@ Config loader — reads config.yaml plus all agent/cron/webhook YAML definitions
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,14 +18,11 @@ ROOT = Path(__file__).parent.parent
 # ---------------------------------------------------------------------------
 
 @dataclass
-class OllamaConfig:
-    base_url: str = "http://localhost:11434"
-
-
-@dataclass
-class OpenAIConfig:
+class ProviderConfig:
+    id: str
+    type: str = "ollama"   # "ollama" | "openai"  (openai covers any OpenAI-compatible API)
+    base_url: str = ""
     api_key: str = ""
-    base_url: str = ""   # override for Azure / OpenAI-compatible endpoints
 
 
 @dataclass
@@ -40,13 +36,12 @@ class AgentConfig:
     id: str = ""
     name: str = ""
     model: str = "llama3.2"
-    provider: str = "ollama"   # "ollama" or "openai"
+    provider: str = "ollama"   # references a provider id from config.providers
     system_prompt: str = "You are a helpful assistant."
     temperature: float = 0.7
     workspace: str = ""
     tools: list[str] = field(default_factory=list)
     max_iterations: int = 10  # safety cap on agentic loop
-    ollama_base_url: str = ""  # overrides global ollama.base_url for this agent
 
 
 @dataclass
@@ -70,8 +65,7 @@ class WebhookConfig:
 
 @dataclass
 class AppConfig:
-    ollama: OllamaConfig = field(default_factory=OllamaConfig)
-    openai: OpenAIConfig = field(default_factory=OpenAIConfig)
+    providers: dict[str, ProviderConfig] = field(default_factory=dict)
     api_key: str = "changeme"
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     default_agent: str = "default"
@@ -87,6 +81,60 @@ class AppConfig:
 def _load_yaml(path: Path) -> dict[str, Any]:
     with open(path) as f:
         return yaml.safe_load(f) or {}
+
+
+def _load_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
+    """
+    Parse providers from config.yaml.
+
+    Supports two formats:
+
+    New (providers map):
+        providers:
+          ollama:
+            type: ollama
+            base_url: http://localhost:11434
+          lm-studio:
+            type: openai
+            base_url: http://localhost:1234/v1
+            api_key: lm-studio
+
+    Legacy (separate ollama/openai keys — auto-migrated):
+        ollama:
+          base_url: http://localhost:11434
+        openai:
+          api_key: sk-...
+          base_url: ""
+    """
+    if "providers" in raw:
+        providers: dict[str, ProviderConfig] = {}
+        for pid, pdata in (raw["providers"] or {}).items():
+            pdata = pdata or {}
+            providers[pid] = ProviderConfig(
+                id=pid,
+                type=pdata.get("type", "ollama"),
+                base_url=pdata.get("base_url", ""),
+                api_key=pdata.get("api_key", ""),
+            )
+        return providers
+
+    # Legacy format — synthesise from ollama: and openai: keys
+    providers = {}
+    ollama_raw = raw.get("ollama", {}) or {}
+    providers["ollama"] = ProviderConfig(
+        id="ollama",
+        type="ollama",
+        base_url=ollama_raw.get("base_url", "http://localhost:11434"),
+    )
+    openai_raw = raw.get("openai", {}) or {}
+    if openai_raw.get("api_key") or openai_raw.get("base_url"):
+        providers["openai"] = ProviderConfig(
+            id="openai",
+            type="openai",
+            api_key=openai_raw.get("api_key", ""),
+            base_url=openai_raw.get("base_url", ""),
+        )
+    return providers
 
 
 def _load_agents(agents_dir: Path) -> dict[str, AgentConfig]:
@@ -107,7 +155,6 @@ def _load_agents(agents_dir: Path) -> dict[str, AgentConfig]:
             workspace=data.get("workspace", str(Path.home())),
             tools=data.get("tools", []),
             max_iterations=int(data.get("max_iterations", 10)),
-            ollama_base_url=data.get("ollama_base_url", ""),
         )
         agents[agent.id] = agent
     return agents
@@ -161,17 +208,10 @@ def load_config(root: Path = ROOT) -> AppConfig:
         raise FileNotFoundError(f"config.yaml not found at {config_path}")
 
     raw = _load_yaml(config_path)
-
-    ollama_raw = raw.get("ollama", {})
-    openai_raw = raw.get("openai", {})
-    telegram_raw = raw.get("telegram", {})
+    telegram_raw = raw.get("telegram", {}) or {}
 
     cfg = AppConfig(
-        ollama=OllamaConfig(base_url=ollama_raw.get("base_url", "http://localhost:11434")),
-        openai=OpenAIConfig(
-            api_key=openai_raw.get("api_key", ""),
-            base_url=openai_raw.get("base_url", ""),
-        ),
+        providers=_load_providers(raw),
         api_key=raw.get("api_key", "changeme"),
         telegram=TelegramConfig(
             token=telegram_raw.get("token", ""),
