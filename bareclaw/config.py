@@ -83,9 +83,25 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def _load_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
+def _provider_secret(secrets_dir: Path, provider_id: str) -> str:
+    """Return api_key from secrets/<provider-id>.yaml, or '' if absent."""
+    path = secrets_dir / f"{provider_id}.yaml"
+    if not path.exists():
+        return ""
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return str(data.get("api_key", ""))
+    except Exception:
+        return ""
+
+
+def _load_providers(raw: dict[str, Any], secrets_dir: Path) -> dict[str, ProviderConfig]:
     """
     Parse providers from config.yaml.
+
+    api_key can be set directly in the provider block or in secrets/<id>.yaml
+    (the secrets file takes precedence when both are present).
 
     Supports two formats:
 
@@ -94,27 +110,31 @@ def _load_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
           ollama:
             type: ollama
             base_url: http://localhost:11434
+          openai:
+            type: openai
+            # api_key omitted here — loaded from secrets/openai.yaml instead
           lm-studio:
             type: openai
             base_url: http://localhost:1234/v1
-            api_key: lm-studio
+            api_key: lm-studio   # local servers don't need a real key
 
     Legacy (separate ollama/openai keys — auto-migrated):
         ollama:
           base_url: http://localhost:11434
         openai:
-          api_key: sk-...
+          api_key: sk-...   # or omit and use secrets/openai.yaml
           base_url: ""
     """
     if "providers" in raw:
         providers: dict[str, ProviderConfig] = {}
         for pid, pdata in (raw["providers"] or {}).items():
             pdata = pdata or {}
+            api_key = _provider_secret(secrets_dir, pid) or pdata.get("api_key", "")
             providers[pid] = ProviderConfig(
                 id=pid,
                 type=pdata.get("type", "ollama"),
                 base_url=pdata.get("base_url", ""),
-                api_key=pdata.get("api_key", ""),
+                api_key=api_key,
             )
         return providers
 
@@ -127,11 +147,12 @@ def _load_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
         base_url=ollama_raw.get("base_url", "http://localhost:11434"),
     )
     openai_raw = raw.get("openai", {}) or {}
-    if openai_raw.get("api_key") or openai_raw.get("base_url"):
+    openai_key = _provider_secret(secrets_dir, "openai") or openai_raw.get("api_key", "")
+    if openai_key or openai_raw.get("base_url"):
         providers["openai"] = ProviderConfig(
             id="openai",
             type="openai",
-            api_key=openai_raw.get("api_key", ""),
+            api_key=openai_key,
             base_url=openai_raw.get("base_url", ""),
         )
     return providers
@@ -211,7 +232,7 @@ def load_config(root: Path = ROOT) -> AppConfig:
     telegram_raw = raw.get("telegram", {}) or {}
 
     cfg = AppConfig(
-        providers=_load_providers(raw),
+        providers=_load_providers(raw, root / "secrets"),
         api_key=raw.get("api_key", "changeme"),
         telegram=TelegramConfig(
             token=telegram_raw.get("token", ""),
