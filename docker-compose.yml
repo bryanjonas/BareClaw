@@ -12,6 +12,7 @@ services:
       - ./memories:/app/memories
       - ./superpowers:/app/superpowers
       - ./secrets:/app/secrets
+      - ./projects:/app/projects
       - ./workspace:/root/workspace
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from bareclaw import db
 from bareclaw.config import load_config
-from bareclaw.core.llm import OllamaClient, OpenAIClient
+from bareclaw.core.llm import CODEX_SECRETS_FILE, CodexOAuthClient, OllamaClient, OpenAIClient
 from bareclaw.scheduler import jobs as scheduler_mod
 from bareclaw.telegram import bot as telegram_mod
 from bareclaw.web import auth as auth_mod
@@ -76,6 +76,14 @@ async def main() -> None:
         if prov.type == "ollama":
             clients[prov.id] = OllamaClient(base_url=prov.base_url or "http://localhost:11434")
             logger.info("Provider '%s' (ollama) → %s", prov.id, prov.base_url or "http://localhost:11434")
+        elif prov.type == "codex":
+            from pathlib import Path
+            secrets_file = Path(prov.auth_file).expanduser() if prov.auth_file else CODEX_SECRETS_FILE
+            clients[prov.id] = CodexOAuthClient(
+                secrets_file=secrets_file,
+                base_url=prov.base_url or None,
+            )
+            logger.info("Provider '%s' (codex-oauth) → %s", prov.id, secrets_file)
         else:
             clients[prov.id] = OpenAIClient(
                 api_key=prov.api_key or "ignored",

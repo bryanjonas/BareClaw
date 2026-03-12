@@ -23,11 +23,12 @@ keywords:
 # Each task can also specify its own agent override.
 agent: ""
 
-# Related memory IDs — informational reference, shown in the UI.
-# These memories are not auto-fetched; they appear in the project's system prompt injection.
+# Related memory IDs — automatically injected into context when project tasks run.
+# Bootstrap creates '{id}-runbook' automatically when you click "Bootstrap Runbook".
+# List additional memory IDs here that tasks should have access to.
 memories:
-  - my-project-architecture
-  - my-project-api
+  - my-project-runbook
+  - my-project-troubleshooting
 
 # Named runnable prompts. Each task can be triggered individually from the UI.
 tasks:
@@ -44,3 +45,39 @@ tasks:
     prompt: |
       Execute the main pipeline. Report each step's outcome and any issues.
     agent: ""  # optional per-task agent override; empty = use project-level agent
+
+# Bootstrap prompt — one-time exploration and memory creation.
+# If defined, a "Bootstrap Memory" button appears in the UI.
+# Use {key} placeholders: {id}, {name}, {description}, {agent}, {memories}, {tasks}
+bootstrap_prompt: |
+  You are bootstrapping the project "{name}" (ID: {id}).
+
+  Description: {description}
+
+  Available tasks in this project: "{tasks}"
+
+  Your goal is to RUN these tasks and document the practical operational knowledge gained.
+
+  Steps:
+  1. Execute each task listed above using the available tools
+  2. Observe and document what actually happens:
+     - What commands/scripts get executed
+     - Where input/output files are located
+     - What services or dependencies are required
+     - Execution time and resource usage
+     - Any errors, warnings, or edge cases encountered
+     - Prerequisites and environment setup needed
+
+  Create a memory called '{id}-runbook' using write_memory that includes:
+  - Pipeline execution flow and key steps
+  - File locations (inputs, outputs, logs, configs)
+  - Dependencies and prerequisites
+  - Common issues and troubleshooting tips
+  - Timing benchmarks and performance notes
+  - Any manual intervention points or configuration needed
+
+  This memory should be a practical operational guide based on ACTUAL execution, not just documentation. Store this memory as '{id}-runbook'
+
+# Optional agent override for bootstrap. Defaults to project-level agent,
+# then falls back to the app's default agent.
+bootstrap_agent: ""

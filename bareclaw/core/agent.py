@@ -6,11 +6,11 @@ from __future__ import annotations
 import logging
 from typing import Any, AsyncIterator
 
-from bareclaw.config import AgentConfig
+from bareclaw.config import AgentConfig, AppConfig
 from bareclaw.core import memory as mem_mod
 from bareclaw.core import projects as proj_mod
 from bareclaw.core import superpowers as sp_mod
-from bareclaw.core.tools import MEMORY_TOOL_NAMES, PROJECT_TOOL_NAMES, SUPERPOWER_TOOL_NAMES, get_tool_schemas
+from bareclaw.core.tools import AGENT_TOOL_NAMES, MEMORY_TOOL_NAMES, PROJECT_TOOL_NAMES, SUPERPOWER_TOOL_NAMES, get_tool_schemas
 from bareclaw.executor import cli as executor
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,11 @@ def _resolve_client(agent: AgentConfig, clients: LLMClients) -> Any:
     return client
 
 
-def _build_system_content(agent: AgentConfig, user_messages: list[dict[str, Any]]) -> str:
+def _build_system_content(
+    agent: AgentConfig,
+    user_messages: list[dict[str, Any]],
+    platform_identity: str = "",
+) -> str:
     """
     Build the effective system prompt, appending relevant memories and superpowers.
     Keyword-matches the user messages against all memories and superpowers and injects matches.
@@ -41,7 +45,11 @@ def _build_system_content(agent: AgentConfig, user_messages: list[dict[str, Any]
     user_text = " ".join(
         m.get("content", "") for m in user_messages if m.get("role") == "user"
     )
-    system_content = agent.system_prompt
+    # Start with platform identity (if provided), then agent's system prompt
+    system_content = ""
+    if platform_identity:
+        system_content = platform_identity.strip() + "\n\n"
+    system_content += agent.system_prompt
 
     relevant_mems = mem_mod.find_relevant(user_text)
     if relevant_mems:
@@ -59,7 +67,13 @@ def _build_system_content(agent: AgentConfig, user_messages: list[dict[str, Any]
         sp_block = "\n\n## Available superpowers\n" + "".join(
             f"\n### {sp.name}\n"
             + (f"{sp.description}\n" if sp.description else "")
-            + "".join(f"{k}: {v}\n" for k, v in {**sp.config, **sp.secrets}.items())
+            + "".join(f"{k}: {v}\n" for k, v in sp.config.items())
+            + (
+                f"Credentials: source {sp.secrets_path}"
+                + (f"  # exports: {', '.join(sp.secrets.keys())}" if sp.secrets else "")
+                + "\n"
+                if sp.secrets_path else ""
+            )
             for sp in relevant_sps
         )
         logger.info(
@@ -93,12 +107,18 @@ def _build_system_content(agent: AgentConfig, user_messages: list[dict[str, Any]
     return system_content
 
 
-def _dispatch_tool(name: str, arguments: dict[str, Any], workspace: str) -> str:
+def _dispatch_tool(
+    name: str,
+    arguments: dict[str, Any],
+    workspace: str,
+    command_timeout: int = 30,
+    config: AppConfig | None = None,
+) -> str:
     """Execute a tool call and return the result as a string."""
     if name == "run_command":
         command = arguments.get("command", "")
         logger.info("Tool run_command: %s (workspace=%s)", command, workspace)
-        return executor.run_command(command, workspace)
+        return executor.run_command(command, workspace, timeout=command_timeout)
     if name == "read_file":
         path = arguments.get("path", "")
         logger.info("Tool read_file: %s (workspace=%s)", path, workspace)
@@ -139,8 +159,12 @@ def _dispatch_tool(name: str, arguments: dict[str, Any], workspace: str) -> str:
         lines = [f"# {sp.name}"]
         if sp.description:
             lines.append(sp.description)
-        for k, v in {**sp.config, **sp.secrets}.items():
+        for k, v in sp.config.items():
             lines.append(f"{k}: {v}")
+        if sp.secrets_path:
+            lines.append(f"Credentials: source {sp.secrets_path}")
+            if sp.secrets:
+                lines.append(f"Available vars: {', '.join(sp.secrets.keys())}")
         return "\n".join(lines)
     if name == "list_projects":
         projs = proj_mod.load_all()
@@ -169,6 +193,39 @@ def _dispatch_tool(name: str, arguments: dict[str, Any], workspace: str) -> str:
                 if t.prompt:
                     lines.append(f"  Prompt: {t.prompt.strip()}")
         return "\n".join(lines)
+    if name == "list_agents":
+        if not config or not config.agents:
+            return "No agents configured."
+        lines = []
+        for agent_id, agent in config.agents.items():
+            # Extract first line of system_prompt as summary
+            summary = agent.system_prompt.split("\n")[0].strip() if agent.system_prompt else ""
+            # Remove markdown headers
+            if summary.startswith("##"):
+                summary = summary.lstrip("#").strip()
+            lines.append(
+                f"- {agent_id}: {agent.name} ({agent.provider}/{agent.model})"
+                + (f" — {summary}" if summary else "")
+            )
+        return "\n".join(lines)
+    if name == "read_agent":
+        if not config:
+            return "[error] Agent configuration not available."
+        agent_id = arguments.get("id", "")
+        agent = config.agents.get(agent_id)
+        if not agent:
+            return f"[error] Agent '{agent_id}' not found."
+        lines = [f"# {agent.name} ({agent.id})"]
+        lines.append(f"Provider: {agent.provider}")
+        lines.append(f"Model: {agent.model}")
+        lines.append(f"Temperature: {agent.temperature}")
+        lines.append(f"Workspace: {agent.workspace}")
+        lines.append(f"Max iterations: {agent.max_iterations}")
+        if agent.tools:
+            lines.append(f"Tools: {', '.join(agent.tools)}")
+        lines.append("\n## System Prompt")
+        lines.append(agent.system_prompt)
+        return "\n".join(lines)
     return f"[error] Unknown tool: {name}"
 
 
@@ -176,6 +233,8 @@ async def run_agent(
     agent: AgentConfig,
     clients: LLMClients,
     user_messages: list[dict[str, Any]],
+    platform_identity: str = "",
+    config: AppConfig | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """
     Run the agentic loop for *agent* given an initial list of *user_messages*.
@@ -184,13 +243,14 @@ async def run_agent(
     """
     llm = _resolve_client(agent, clients)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _build_system_content(agent, user_messages)},
+        {"role": "system", "content": _build_system_content(agent, user_messages, platform_identity)},
         *user_messages,
     ]
     tools = (get_tool_schemas(agent.tools)
              + get_tool_schemas(MEMORY_TOOL_NAMES)
              + get_tool_schemas(SUPERPOWER_TOOL_NAMES)
-             + get_tool_schemas(PROJECT_TOOL_NAMES))
+             + get_tool_schemas(PROJECT_TOOL_NAMES)
+             + get_tool_schemas(AGENT_TOOL_NAMES))
 
     for iteration in range(agent.max_iterations):
         response = await llm.chat(
@@ -214,7 +274,7 @@ async def run_agent(
             fn = tc["function"]
             tool_name = fn["name"]
             tool_args = fn.get("arguments", {})
-            tool_result = _dispatch_tool(tool_name, tool_args, agent.workspace)
+            tool_result = _dispatch_tool(tool_name, tool_args, agent.workspace, agent.command_timeout, config)
             logger.debug("Tool %s result: %s", tool_name, tool_result[:200])
             messages.append({
                 "role": "tool",
@@ -235,6 +295,8 @@ async def run_agent_stream(
     agent: AgentConfig,
     clients: LLMClients,
     user_messages: list[dict[str, Any]],
+    platform_identity: str = "",
+    config: AppConfig | None = None,
 ) -> AsyncIterator[str]:
     """
     Run the agentic loop, streaming the final text response token by token.
@@ -244,13 +306,14 @@ async def run_agent_stream(
     """
     llm = _resolve_client(agent, clients)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _build_system_content(agent, user_messages)},
+        {"role": "system", "content": _build_system_content(agent, user_messages, platform_identity)},
         *user_messages,
     ]
     tools = (get_tool_schemas(agent.tools)
              + get_tool_schemas(MEMORY_TOOL_NAMES)
              + get_tool_schemas(SUPERPOWER_TOOL_NAMES)
-             + get_tool_schemas(PROJECT_TOOL_NAMES))
+             + get_tool_schemas(PROJECT_TOOL_NAMES)
+             + get_tool_schemas(AGENT_TOOL_NAMES))
 
     for iteration in range(agent.max_iterations):
         response = await llm.chat(
@@ -279,7 +342,7 @@ async def run_agent_stream(
             fn = tc["function"]
             tool_name = fn["name"]
             tool_args = fn.get("arguments", {})
-            tool_result = _dispatch_tool(tool_name, tool_args, agent.workspace)
+            tool_result = _dispatch_tool(tool_name, tool_args, agent.workspace, agent.command_timeout, config)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.get("id", ""),

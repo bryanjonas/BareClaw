@@ -7,6 +7,7 @@ of named tasks (runnable prompts) that can be triggered from the UI or by agents
 from __future__ import annotations
 
 import re
+import string
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from typing import Any
 import yaml
 
 PROJECTS_DIR = Path(__file__).parent.parent.parent / "projects"
+MEMORIES_DIR = Path(__file__).parent.parent.parent / "memories"
 
 
 @dataclass
@@ -34,6 +36,8 @@ class Project:
     agent: str = ""  # default agent for tasks; falls back to config.default_agent
     memories: list[str] = field(default_factory=list)
     tasks: list[ProjectTask] = field(default_factory=list)
+    bootstrap_prompt: str = ""
+    bootstrap_agent: str = ""
 
 
 def _parse(path: Path) -> Project | None:
@@ -58,6 +62,8 @@ def _parse(path: Path) -> Project | None:
             agent=data.get("agent", ""),
             memories=data.get("memories", []),
             tasks=tasks,
+            bootstrap_prompt=data.get("bootstrap_prompt", ""),
+            bootstrap_agent=data.get("bootstrap_agent", ""),
         )
     except Exception:
         return None
@@ -85,6 +91,15 @@ def load_one(project_id: str) -> Project | None:
     return _parse(path)
 
 
+def load_task(project_id: str, task_id: str) -> tuple[Project | None, ProjectTask | None]:
+    """Load a project and one of its tasks by id."""
+    project = load_one(project_id)
+    if not project:
+        return None, None
+    task = next((t for t in project.tasks if t.id == task_id), None)
+    return project, task
+
+
 def find_relevant(text: str) -> list[Project]:
     """
     Return projects whose keywords appear as whole words in *text*.
@@ -101,3 +116,37 @@ def find_relevant(text: str) -> list[Project]:
                 results.append(proj)
                 break
     return results
+
+
+def has_runbook(project_id: str) -> bool:
+    """Check if the project's runbook memory exists."""
+    runbook_path = MEMORIES_DIR / f"{project_id}-runbook.yaml"
+    return runbook_path.exists()
+
+
+def interpolate(template: str, proj: Project) -> str:
+    """
+    Replace {key} placeholders in *template* with values from the project.
+    Available keys: id, name, description, agent, memories, tasks.
+    Unknown keys are left as-is.
+    """
+    task_list = "\n".join(
+        f"  - {t.id}: {t.name} — {t.description}" if t.description else f"  - {t.id}: {t.name}"
+        for t in proj.tasks
+    )
+    variables = {
+        "id": proj.id,
+        "name": proj.name,
+        "description": proj.description,
+        "agent": proj.agent,
+        "memories": ", ".join(proj.memories),
+        "tasks": task_list,
+    }
+    # Use string.Formatter to substitute only known keys, leaving unknown ones intact
+    result = []
+    formatter = string.Formatter()
+    for literal, field_name, _, _ in formatter.parse(template):
+        result.append(literal)
+        if field_name is not None:
+            result.append(str(variables.get(field_name, "{" + field_name + "}")))
+    return "".join(result)

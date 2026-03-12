@@ -196,6 +196,7 @@
     <a href="/memories" {% if request.url.path == '/memories' %}class="active"{% endif %}>memories</a>
     <a href="/crons" {% if request.url.path == '/crons' %}class="active"{% endif %}>crons</a>
     <a href="/webhooks" {% if request.url.path == '/webhooks' %}class="active"{% endif %}>webhooks</a>
+    <a href="/settings" {% if request.url.path == '/settings' %}class="active"{% endif %}>settings</a>
     <span class="spacer"></span>
     <form method="post" action="/logout">
       <button type="submit">logout</button>

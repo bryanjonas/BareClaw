@@ -50,7 +50,7 @@ async def _handle_webhook(
         return
 
     try:
-        response, _ = await run_agent(agent, clients, [{"role": "user", "content": prompt}])
+        response, _ = await run_agent(agent, clients, [{"role": "user", "content": prompt}], config.platform_identity, config)
     except Exception as exc:
         logger.exception("Webhook %s agent run failed: %s", wh.id, exc)
         response = f"[error] {exc}"

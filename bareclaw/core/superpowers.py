@@ -29,20 +29,32 @@ class Superpower:
     description: str = ""
     config: dict[str, str] = field(default_factory=dict)
     secrets: dict[str, str] = field(default_factory=dict)
+    secrets_path: Path | None = None   # absolute path to secrets/<id>.env, if it exists
     keywords: list[str] = field(default_factory=list)
     bootstrap_prompt: str = ""
     bootstrap_agent: str = ""
 
 
+def _parse_dotenv(path: Path) -> dict[str, str]:
+    """Parse a KEY=VALUE .env file into a flat str→str dict."""
+    result: dict[str, str] = {}
+    for line in path.read_text(errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip().strip("\"'")
+    return result
+
+
 def _load_secrets(sp_id: str) -> dict[str, str]:
-    """Load secrets/<id>.yaml and return a flat str→str dict. Returns {} if missing."""
-    path = SECRETS_DIR / f"{sp_id}.yaml"
+    """Load secrets/<id>.env and return a flat str→str dict. Returns {} if missing."""
+    path = SECRETS_DIR / f"{sp_id}.env"
     if not path.exists():
         return {}
     try:
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return {str(k): str(v) for k, v in data.items() if not str(k).startswith("#")}
+        return _parse_dotenv(path)
     except Exception:
         return {}
 
@@ -52,12 +64,14 @@ def _parse(path: Path) -> Superpower | None:
         with open(path) as f:
             data: dict[str, Any] = yaml.safe_load(f) or {}
         sp_id = data.get("id", path.stem)
+        secrets_path = SECRETS_DIR / f"{sp_id}.env"
         return Superpower(
             id=sp_id,
             name=data.get("name", sp_id),
             description=data.get("description", ""),
             config={str(k): str(v) for k, v in (data.get("config") or {}).items()},
             secrets=_load_secrets(sp_id),
+            secrets_path=secrets_path if secrets_path.exists() else None,
             keywords=[str(k).lower() for k in data.get("keywords", [])],
             bootstrap_prompt=data.get("bootstrap_prompt", ""),
             bootstrap_agent=data.get("bootstrap_agent", ""),

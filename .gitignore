@@ -25,7 +25,8 @@ memories/*.yaml
 superpowers/*.yaml
 !superpowers/example.yaml
 secrets/*.yaml
-!secrets/example.yaml
+secrets/*.env
+!secrets/example.env
 
 # Projects — only example.yaml is committed
 projects/*.yaml

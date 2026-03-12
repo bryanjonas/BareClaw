@@ -10,18 +10,15 @@ id: my-cron
 #   "0 9 * * 1-5" — 09:00 on weekdays
 schedule: "0 * * * *"
 
-# Agent to run (must match an id in agents/).
-agent: default
+# Define exactly one target:
+# 1) A scheduled project task.
+project: my-project
+task: check-system
 
-# Optional shell command. Runs first; stdout+stderr are prepended to the prompt.
-# Leave empty to send the prompt directly without any command output.
-command: "df -h && free -m"
-
-# Prompt sent to the agent (after any command output).
-prompt: |
-  Analyse the output above.
-  Alert only if disk usage exceeds 80% or free memory is below 500 MB.
-  Otherwise respond with a single "OK" line.
+# 2) Or an explicit shell command.
+# command: "df -h"
+# workspace: ~/workspace
+# timeout: 30
 
 # Send the agent's response to all allowed Telegram users.
 notify_telegram: false

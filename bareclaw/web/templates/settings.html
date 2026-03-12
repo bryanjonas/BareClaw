@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Settings — Bareclaw{% endblock %}
+
+{% block head %}
+<style>
+  .settings-grid { display: flex; flex-direction: column; gap: 1.5rem; max-width: 640px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem 1.5rem; }
+  .card h2 { font-size: .85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+
+  .status-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+  .badge { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; padding: .25rem .6rem; border-radius: 4px; font-weight: 600; }
+  .badge.connected    { background: rgba(76,175,80,.15); color: var(--success); }
+  .badge.disconnected { background: rgba(244,67,54,.12); color: var(--error); }
+
+  .expiry { font-size: .78rem; color: var(--muted); }
+
+  .btn-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
+  button.primary { background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: .45rem 1rem; font-family: var(--font); font-size: .82rem; cursor: pointer; }
+  button.primary:hover { background: var(--accent-dim); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.danger  { background: transparent; color: var(--error); border: 1px solid var(--error); border-radius: 4px; padding: .45rem 1rem; font-family: var(--font); font-size: .82rem; cursor: pointer; }
+  button.danger:hover { background: rgba(244,67,54,.08); }
+
+  .msg { font-size: .82rem; margin-top: .75rem; min-height: 1.2em; }
+  .msg.ok  { color: var(--success); }
+  .msg.err { color: var(--error); }
+
+  details { margin-top: 1.25rem; }
+  details summary { cursor: pointer; font-size: .82rem; color: var(--muted); user-select: none; }
+  details summary:hover { color: var(--text); }
+  .manual-form { margin-top: .75rem; display: flex; flex-direction: column; gap: .6rem; }
+  .manual-form label { font-size: .78rem; color: var(--muted); }
+  .manual-form input {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); font-family: var(--font); font-size: .82rem;
+    padding: .45rem .75rem; width: 100%;
+  }
+  .manual-form input:focus { outline: none; border-color: var(--accent); }
+
+  .auth-url-box {
+    margin-top: .75rem; padding: .6rem .75rem;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+    font-size: .75rem; word-break: break-all; color: var(--muted);
+    display: none;
+  }
+  .auth-url-box a { color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-grid">
+
+  <div class="card">
+    <h2>Codex OAuth</h2>
+
+    <div class="status-row">
+      {% if codex.connected %}
+        <span class="badge connected">&#10003; connected</span>
+        <span class="expiry" id="expiry-label">
+          expires {{ codex.expiry | int | string }}
+        </span>
+      {% else %}
+        <span class="badge disconnected">&#8226; not connected</span>
+      {% endif %}
+    </div>
+
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:1rem;">
+      Authenticates with your ChatGPT account via OAuth 2.0 + PKCE.
+      No API key required.
+    </p>
+
+    <div class="btn-row">
+      {% if not codex.connected %}
+        <button class="primary" id="btn-connect" onclick="startOAuth()">Connect</button>
+      {% else %}
+        <button class="primary" id="btn-connect" onclick="startOAuth()">Reconnect</button>
+        <button class="danger" onclick="disconnect()">Disconnect</button>
+      {% endif %}
+    </div>
+
+    <div class="auth-url-box" id="auth-url-box">
+      If your browser didn't open, <a id="auth-url-link" href="#" target="_blank">click here</a>
+      or copy this URL:<br><span id="auth-url-text"></span>
+    </div>
+
+    <div id="callback-box" style="display:none;margin-top:.75rem;">
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:.4rem;">
+        If your browser redirected to an unreachable <code>localhost:1455</code> page,
+        copy the full URL from the address bar and paste it here:
+      </p>
+      <div style="display:flex;gap:.5rem;">
+        <input type="text" id="callback-url-input"
+          placeholder="http://localhost:1455/auth/callback?code=…"
+          style="flex:1;background:var(--code-bg);border:1px solid var(--border);border-radius:4px;
+                 color:var(--text);font-family:var(--font);font-size:.82rem;padding:.45rem .75rem;">
+        <button class="primary" onclick="submitCallback()">Submit</button>
+      </div>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <details>
+      <summary>Manual token entry (paste sk-… or eyJ… token)</summary>
+      <div class="manual-form">
+        <label for="token-input">Access token</label>
+        <input type="password" id="token-input" placeholder="Paste token here…">
+        <div class="btn-row">
+          <button class="primary" onclick="saveToken()">Save token</button>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>System Management</h2>
+
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:1rem;">
+      Restart the Bareclaw service to apply configuration changes or recover from errors.
+    </p>
+
+    <div class="btn-row">
+      <button class="danger" onclick="restartService()">Restart Service</button>
+    </div>
+
+    <div class="msg" id="restart-msg"></div>
+  </div>
+
+</div>
+
+<script>
+  function e(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function setMsg(text, ok) {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  function fmtExpiry(ts) {
+    if (!ts) return '';
+    const d = new Date(ts * 1000);
+    return 'expires ' + d.toLocaleString();
+  }
+
+  // Format expiry on load
+  const expiryEl = document.getElementById('expiry-label');
+  if (expiryEl) {
+    const raw = parseInt(expiryEl.textContent.trim().replace('expires ', ''), 10);
+    if (raw) expiryEl.textContent = fmtExpiry(raw);
+  }
+
+  let pollTimer = null;
+
+  async function startOAuth() {
+    const btn = document.getElementById('btn-connect');
+    btn.disabled = true;
+    setMsg('Starting OAuth flow…', true);
+    clearInterval(pollTimer);
+
+    let resp, data;
+    try {
+      resp = await fetch('/api/auth/codex/start', {method: 'POST'});
+      data = await resp.json();
+    } catch (err) {
+      setMsg('Request failed: ' + err, false);
+      btn.disabled = false;
+      return;
+    }
+
+    if (data.error) {
+      setMsg(data.error, false);
+      btn.disabled = false;
+      return;
+    }
+
+    const authUrl = data.auth_url;
+    if (authUrl) {
+      window.open(authUrl, '_blank');
+      document.getElementById('auth-url-link').href = authUrl;
+      document.getElementById('auth-url-text').textContent = authUrl;
+      document.getElementById('auth-url-box').style.display = 'block';
+    }
+
+    document.getElementById('callback-box').style.display = 'block';
+    setMsg('Waiting for browser callback…', true);
+
+    pollTimer = setInterval(async () => {
+      let s;
+      try {
+        const r = await fetch('/api/auth/codex/status');
+        s = await r.json();
+      } catch (_) { return; }
+
+      if (s.in_progress) return;
+
+      clearInterval(pollTimer);
+      btn.disabled = false;
+      document.getElementById('auth-url-box').style.display = 'none';
+      document.getElementById('callback-box').style.display = 'none';
+
+      if (s.connected) {
+        setMsg('Connected!', true);
+        if (expiryEl) expiryEl.textContent = fmtExpiry(s.expiry);
+        setTimeout(() => location.reload(), 1200);
+      } else if (s.flow_result && s.flow_result.error) {
+        setMsg(s.flow_result.error, false);
+      } else {
+        setMsg('Authentication failed.', false);
+      }
+    }, 2000);
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect Codex? You will need to reconnect to use the codex provider.')) return;
+    const resp = await fetch('/api/auth/codex/disconnect', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) location.reload();
+    else setMsg(data.error || 'Failed.', false);
+  }
+
+  async function submitCallback() {
+    const url = document.getElementById('callback-url-input').value.trim();
+    if (!url) { setMsg('Paste the callback URL first.', false); return; }
+    let resp, data;
+    try {
+      resp = await fetch('/api/auth/codex/callback', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url})
+      });
+      data = await resp.json();
+    } catch (err) {
+      setMsg('Request failed: ' + err, false);
+      return;
+    }
+    if (data.ok) {
+      clearInterval(pollTimer);
+      document.getElementById('callback-box').style.display = 'none';
+      document.getElementById('auth-url-box').style.display = 'none';
+      document.getElementById('btn-connect').disabled = false;
+      setMsg('Connected!', true);
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      setMsg(data.error || 'Failed.', false);
+    }
+  }
+
+  async function saveToken() {
+    const token = document.getElementById('token-input').value.trim();
+    if (!token) { setMsg('Token is empty.', false); return; }
+    const resp = await fetch('/api/auth/codex/token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token})
+    });
+    const data = await resp.json();
+    if (data.ok) { setMsg('Token saved.', true); setTimeout(() => location.reload(), 800); }
+    else setMsg(data.error || 'Failed.', false);
+  }
+
+  async function restartService() {
+    if (!confirm('Restart Bareclaw? The connection will be lost momentarily.')) return;
+
+    const msgEl = document.getElementById('restart-msg');
+    msgEl.textContent = 'Restarting service…';
+    msgEl.className = 'msg ok';
+
+    try {
+      const resp = await fetch('/api/system/restart', {method: 'POST'});
+      const data = await resp.json();
+
+      if (data.ok) {
+        msgEl.textContent = 'Service restarting. Reconnecting in 5 seconds…';
+        setTimeout(() => location.reload(), 5000);
+      } else {
+        msgEl.textContent = data.error || 'Restart failed.';
+        msgEl.className = 'msg err';
+      }
+    } catch (err) {
+      msgEl.textContent = 'Service is restarting…';
+      msgEl.className = 'msg ok';
+      setTimeout(() => location.reload(), 5000);
+    }
+  }
+</script>
+{% endblock %}

@@ -7,15 +7,19 @@
 </div>
 
 <div class="card">
-  <h2>Configured Jobs</h2>
+  <div class="section-header" style="margin-bottom:.75rem;">
+    <h2>Configured Jobs</h2>
+    <button class="primary" onclick="refreshCrons()" style="margin-left:auto;padding:.3rem .7rem;font-size:12px;">Refresh</button>
+  </div>
+  <div id="crons-container">
   {% if crons %}
   <table>
     <thead>
       <tr>
         <th>ID</th>
         <th>Schedule</th>
-        <th>Agent</th>
-        <th>Command</th>
+        <th>Type</th>
+        <th>Target</th>
         <th>Telegram</th>
       </tr>
     </thead>
@@ -24,12 +28,12 @@
       <tr>
         <td><code>{{ cron.id }}</code></td>
         <td><code>{{ cron.schedule }}</code></td>
-        <td><code>{{ cron.agent }}</code></td>
+        <td><code>{% if cron.command %}command{% else %}task{% endif %}</code></td>
         <td>
           {% if cron.command %}
-          <code class="truncate" style="display:block;max-width:260px;">{{ cron.command }}</code>
+          <code class="truncate" style="display:block;max-width:320px;">{{ cron.command }}</code>
           {% else %}
-          <span class="muted">—</span>
+          <code>{{ cron.project or '—' }}.{{ cron.task or '—' }}</code>
           {% endif %}
         </td>
         <td>{% if cron.notify_telegram %}<span class="badge badge-ok">yes</span>{% else %}<span class="muted">no</span>{% endif %}</td>
@@ -40,6 +44,7 @@
   {% else %}
   <p class="muted">No cron jobs configured. Add YAML files to the <code>crons/</code> directory.</p>
   {% endif %}
+  </div>
 </div>
 
 <div class="card">
@@ -55,7 +60,7 @@
       <th>Job ID</th>
       <th>Ran At</th>
       <th>Status</th>
-      <th>LLM Summary</th>
+      <th>Result</th>
     </tr>
   </thead>
   <tbody id="runs-body">
@@ -70,11 +75,7 @@
         <span class="badge badge-error">error</span>
         {% endif %}
       </td>
-      <td>
-        <div class="truncate" style="max-width:500px;" title="{{ run.llm_response }}">
-          {{ run.llm_response or '—' }}
-        </div>
-      </td>
+      <td><div class="truncate" style="max-width:500px;" title="{{ run.llm_response }}">{{ run.llm_response or '—' }}</div></td>
     </tr>
     {% endfor %}
   </tbody>
@@ -86,6 +87,49 @@
 </div>
 
 <script>
+async function refreshCrons() {
+  const resp = await fetch("/api/crons");
+  const crons = await resp.json();
+  const container = document.getElementById("crons-container");
+
+  if (!crons.length) {
+    container.innerHTML = '<p class="muted">No cron jobs configured. Add YAML files to the <code>crons/</code> directory.</p>';
+    return;
+  }
+
+  const rows = crons.map(c => `
+    <tr>
+      <td><code>${escHtml(c.id)}</code></td>
+      <td><code>${escHtml(c.schedule)}</code></td>
+      <td><code>${c.command ? 'command' : 'task'}</code></td>
+      <td>
+        ${c.command
+          ? `<code class="truncate" style="display:block;max-width:320px;">${escHtml(c.command)}</code>`
+          : `<code>${escHtml(c.project || '—')}.${escHtml(c.task || '—')}</code>`
+        }
+      </td>
+      <td>${c.notify_telegram
+        ? '<span class="badge badge-ok">yes</span>'
+        : '<span class="muted">no</span>'}</td>
+    </tr>
+  `).join("");
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Schedule</th>
+          <th>Type</th>
+          <th>Target</th>
+          <th>Telegram</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
 async function refreshRuns() {
   const resp = await fetch("/api/cron-runs?limit=100");
   const runs = await resp.json();
@@ -109,7 +153,7 @@ async function refreshRuns() {
 
   container.innerHTML = `
     <table>
-      <thead><tr><th>Job ID</th><th>Ran At</th><th>Status</th><th>LLM Summary</th></tr></thead>
+      <thead><tr><th>Job ID</th><th>Ran At</th><th>Status</th><th>Result</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;

@@ -141,7 +141,7 @@
 
     {% if sp.bootstrap_prompt %}
     <div class="sp-actions">
-      <button class="primary" onclick="bootstrap('{{ sp.id }}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap</button>
+      <button class="primary" onclick="bootstrap('{{ sp.id }}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap Memory</button>
       <span class="spinner" id="spinner-{{ sp.id }}">running…</span>
     </div>
     <div id="result-{{ sp.id }}"></div>
@@ -201,7 +201,7 @@ async function refreshAll() {
     ).join("");
     const bootstrapBtn = sp.has_bootstrap
       ? `<div class="sp-actions">
-           <button class="primary" onclick="bootstrap('${e(sp.id)}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap</button>
+           <button class="primary" onclick="bootstrap('${e(sp.id)}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap Memory</button>
            <span class="spinner" id="spinner-${e(sp.id)}">running…</span>
          </div>
          <div id="result-${e(sp.id)}"></div>`

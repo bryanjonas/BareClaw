@@ -19,6 +19,9 @@ SUPERPOWER_TOOL_NAMES = ["list_superpowers", "read_superpower"]
 # Project tools are always added to every agent's tool list as well.
 PROJECT_TOOL_NAMES = ["list_projects", "read_project"]
 
+# Agent discovery tools are always added to every agent's tool list as well.
+AGENT_TOOL_NAMES = ["list_agents", "read_agent"]
+
 TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "run_command": {
         "type": "function",
@@ -193,6 +196,42 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "id": {
                         "type": "string",
                         "description": "The project id (filename without .yaml).",
+                    }
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    "list_agents": {
+        "type": "function",
+        "function": {
+            "name": "list_agents",
+            "description": (
+                "List all configured agents with their id, name, provider, model, and role summary. "
+                "Use this to discover what specialized agents are available for delegation or "
+                "to understand which agent is best suited for a specific task."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    "read_agent": {
+        "type": "function",
+        "function": {
+            "name": "read_agent",
+            "description": (
+                "Read the full configuration and system prompt for a specific agent by id. "
+                "Returns the agent's capabilities, workspace, tools, and behavioral instructions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The agent id (filename without .yaml).",
                     }
                 },
                 "required": ["id"],

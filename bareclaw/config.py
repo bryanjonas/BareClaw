@@ -20,9 +20,10 @@ ROOT = Path(__file__).parent.parent
 @dataclass
 class ProviderConfig:
     id: str
-    type: str = "ollama"   # "ollama" | "openai"  (openai covers any OpenAI-compatible API)
+    type: str = "ollama"   # "ollama" | "openai" | "codex"
     base_url: str = ""
     api_key: str = ""
+    auth_file: str = ""    # for type: codex — path to auth.json (default: ~/.codex/auth.json)
 
 
 @dataclass
@@ -41,16 +42,19 @@ class AgentConfig:
     temperature: float = 0.7
     workspace: str = ""
     tools: list[str] = field(default_factory=list)
-    max_iterations: int = 10  # safety cap on agentic loop
+    max_iterations: int = 10   # safety cap on agentic loop
+    command_timeout: int = 30  # seconds; passed to run_command
 
 
 @dataclass
 class CronConfig:
     id: str = ""
     schedule: str = ""
-    agent: str = "default"
-    command: str = ""        # optional shell command whose output feeds the LLM
-    prompt: str = ""
+    project: str = ""      # project id from projects/<id>.yaml
+    task: str = ""         # task id inside the referenced project
+    command: str = ""      # explicit shell command for deterministic command jobs
+    workspace: str = ""    # workspace for command jobs; defaults to the user's home dir
+    timeout: int = 30      # seconds for command jobs
     notify_telegram: bool = False
 
 
@@ -69,6 +73,7 @@ class AppConfig:
     api_key: str = "changeme"
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     default_agent: str = "default"
+    platform_identity: str = ""  # master identity injected into all agent system prompts
     agents: dict[str, AgentConfig] = field(default_factory=dict)
     crons: dict[str, CronConfig] = field(default_factory=dict)
     webhooks: dict[str, WebhookConfig] = field(default_factory=dict)
@@ -83,15 +88,26 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _parse_dotenv(path: Path) -> dict[str, str]:
+    """Parse a KEY=VALUE .env file into a flat str→str dict."""
+    result: dict[str, str] = {}
+    for line in path.read_text(errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip().strip("\"'")
+    return result
+
+
 def _provider_secret(secrets_dir: Path, provider_id: str) -> str:
-    """Return api_key from secrets/<provider-id>.yaml, or '' if absent."""
-    path = secrets_dir / f"{provider_id}.yaml"
+    """Return api_key from secrets/<provider-id>.env, or '' if absent."""
+    path = secrets_dir / f"{provider_id}.env"
     if not path.exists():
         return ""
     try:
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return str(data.get("api_key", ""))
+        return _parse_dotenv(path).get("api_key", "")
     except Exception:
         return ""
 
@@ -135,6 +151,7 @@ def _load_providers(raw: dict[str, Any], secrets_dir: Path) -> dict[str, Provide
                 type=pdata.get("type", "ollama"),
                 base_url=pdata.get("base_url", ""),
                 api_key=api_key,
+                auth_file=pdata.get("auth_file", ""),
             )
         return providers
 
@@ -176,6 +193,7 @@ def _load_agents(agents_dir: Path) -> dict[str, AgentConfig]:
             workspace=data.get("workspace", str(Path.home())),
             tools=data.get("tools", []),
             max_iterations=int(data.get("max_iterations", 10)),
+            command_timeout=int(data.get("command_timeout", 30)),
         )
         agents[agent.id] = agent
     return agents
@@ -192,9 +210,11 @@ def _load_crons(crons_dir: Path) -> dict[str, CronConfig]:
         cron = CronConfig(
             id=data.get("id", p.stem),
             schedule=data.get("schedule", ""),
-            agent=data.get("agent", "default"),
+            project=data.get("project", ""),
+            task=data.get("task", ""),
             command=data.get("command", ""),
-            prompt=data.get("prompt", ""),
+            workspace=data.get("workspace", ""),
+            timeout=int(data.get("timeout", 30)),
             notify_telegram=bool(data.get("notify_telegram", False)),
         )
         crons[cron.id] = cron
@@ -239,6 +259,7 @@ def load_config(root: Path = ROOT) -> AppConfig:
             allowed_user_ids=telegram_raw.get("allowed_user_ids", []),
         ),
         default_agent=raw.get("default_agent", "default"),
+        platform_identity=raw.get("platform_identity", ""),
     )
 
     cfg.agents = _load_agents(root / "agents")

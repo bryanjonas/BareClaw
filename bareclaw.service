@@ -1,0 +1,19 @@
+[Unit]
+Description=Bareclaw AI Agent Platform
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bareclaw/bareclaw
+ExecStart=/home/bareclaw/bareclaw/.venv/bin/python main.py
+SupplementaryGroups=docker
+Restart=on-failure
+RestartSec=5
+
+# Logging — view with: journalctl --user -u bareclaw -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bareclaw
+
+[Install]
+WantedBy=default.target

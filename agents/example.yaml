@@ -6,15 +6,39 @@ id: my-agent
 name: "My Agent"
 
 # LLM provider: references a provider id defined under 'providers:' in config.yaml.
-# The default config includes "ollama" and "openai". Add more providers there to
-# point agents at LM Studio, vLLM, llama.cpp, separate Ollama instances, etc.
+# The default config includes examples for:
+#   - ollama (local Ollama instance)
+#   - openai (OpenAI API)
+#   - openrouter (OpenRouter.ai - 100+ models)
+#   - lm-studio, vllm, llama.cpp (OpenAI-compatible servers)
 provider: ollama
 
-# Model name as known to the provider (e.g. llama3.2, mistral, gpt-4o, deepseek-coder)
+# Model name as known to the provider
+# Examples:
+#   - Ollama: llama3.2, mistral, deepseek-coder
+#   - OpenAI: gpt-4o, gpt-4o-mini, o1-preview
+#   - OpenRouter: anthropic/claude-3.5-sonnet, google/gemini-pro-1.5, meta-llama/llama-3.1-405b
 model: llama3.2
 
+# Agent-specific identity and instructions.
+# This defines the agent's role, personality, and specialized knowledge.
+#
+# NOTE: The platform identity from config.yaml is automatically injected BEFORE
+# this prompt. The platform identity tells the agent about Bareclaw's capabilities
+# (memories, superpowers, projects, tools). This system_prompt should focus on:
+#   - The agent's specific role or expertise
+#   - Domain-specific knowledge or context
+#   - Behavioral guidelines unique to this agent
+#   - Task-specific instructions
+#
+# Keep it brief and descriptive. Example for a specialized agent:
+#   system_prompt: |
+#     DevOps specialist for infrastructure automation and monitoring.
+#     Expert in Docker, CI/CD, Linux administration, and IaC (Terraform/Ansible).
+#     Check system status before changes. Document in memories. Use dry-run first.
+#     Escalate critical alerts with clear severity levels.
 system_prompt: |
-  You are a helpful assistant.
+  General-purpose helpful assistant.
 
 # Sampling temperature (0.0 = deterministic, 1.0 = creative)
 temperature: 0.7
@@ -31,6 +55,7 @@ workspace: ~/workspace
 #   list_memories, read_memory, write_memory      (memory system)
 #   list_superpowers, read_superpower             (superpowers system)
 #   list_projects, read_project                   (projects system)
+#   list_agents, read_agent                       (agent discovery)
 tools:
   - run_command
   - read_file

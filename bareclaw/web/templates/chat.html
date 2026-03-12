@@ -2,6 +2,7 @@
 {% block title %}Chat — Bareclaw{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <style>
   main { padding: 0; max-width: 100%; }
 
@@ -79,7 +80,6 @@
     border-radius: 6px;
     padding: .6rem .9rem;
     line-height: 1.6;
-    white-space: pre-wrap;
     word-break: break-word;
   }
   .message.user .msg-body {
@@ -87,8 +87,83 @@
     border-color: var(--accent);
   }
 
-  .msg-body code { font-size: 12px; }
-  .msg-body pre { margin: .5rem 0; }
+  /* Markdown styles */
+  .msg-body h1, .msg-body h2, .msg-body h3, .msg-body h4, .msg-body h5, .msg-body h6 {
+    margin: .75rem 0 .5rem;
+    line-height: 1.3;
+  }
+  .msg-body h1 { font-size: 1.4rem; font-weight: 700; }
+  .msg-body h2 { font-size: 1.2rem; font-weight: 700; }
+  .msg-body h3 { font-size: 1.05rem; font-weight: 600; }
+  .msg-body h4, .msg-body h5, .msg-body h6 { font-size: .95rem; font-weight: 600; }
+
+  .msg-body p { margin: .5rem 0; }
+  .msg-body p:first-child { margin-top: 0; }
+  .msg-body p:last-child { margin-bottom: 0; }
+
+  .msg-body ul, .msg-body ol {
+    margin: .5rem 0;
+    padding-left: 1.5rem;
+  }
+  .msg-body li { margin: .25rem 0; }
+
+  .msg-body code {
+    background: rgba(0,0,0,.3);
+    padding: .15rem .35rem;
+    border-radius: 3px;
+    font-size: .85em;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  }
+
+  .msg-body pre {
+    background: #282c34;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 6px;
+    padding: .75rem;
+    margin: .75rem 0;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .msg-body pre code {
+    background: none;
+    padding: 0;
+    font-size: .85rem;
+  }
+
+  .msg-body blockquote {
+    border-left: 3px solid var(--accent);
+    margin: .75rem 0;
+    padding-left: .75rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .msg-body a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .msg-body a:hover { text-decoration: underline; }
+
+  .msg-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
+  }
+
+  .msg-body table {
+    border-collapse: collapse;
+    margin: .75rem 0;
+    width: 100%;
+  }
+  .msg-body th, .msg-body td {
+    border: 1px solid var(--border);
+    padding: .4rem .6rem;
+    text-align: left;
+  }
+  .msg-body th {
+    background: rgba(0,0,0,.2);
+    font-weight: 600;
+  }
 
   .typing-indicator {
     display: none;
@@ -155,6 +230,11 @@
 {% block content %}
 <div class="chat-layout">
   <aside class="sidebar">
+    <button class="agent-btn" style="background: var(--accent); color: #fff; border-color: var(--accent); margin-bottom: 1rem;"
+            onclick="newChat()">
+      + New Chat
+    </button>
+
     <h2>Agents</h2>
     {% for agent in agents %}
     <button class="agent-btn {% if agent.id == default_agent %}active{% endif %}"
@@ -185,14 +265,79 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
+  // Configure marked for syntax highlighting
+  marked.setOptions({
+    highlight: function(code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(code, { language: lang }).value;
+        } catch (e) {}
+      }
+      return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true
+  });
+
   const DEFAULT_AGENT = "{{ default_agent }}";
   let currentAgent = DEFAULT_AGENT;
   let ws = null;
   let isWaiting = false;
   let currentMsgEl = null;
+  let conversation = [];  // Track full conversation
 
   const WS_TOKEN = "{{ ws_token }}";
+  const STORAGE_KEY = "bareclaw_conversation";
+  const AGENT_KEY = "bareclaw_current_agent";
+
+  function saveConversation() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
+      localStorage.setItem(AGENT_KEY, currentAgent);
+    } catch (e) {
+      console.error("Failed to save conversation:", e);
+    }
+  }
+
+  function loadConversation() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const savedAgent = localStorage.getItem(AGENT_KEY);
+
+      if (saved) {
+        conversation = JSON.parse(saved);
+        // Restore messages to UI
+        conversation.forEach(msg => {
+          appendMessage(msg.role, msg.content, false);
+        });
+      }
+
+      if (savedAgent) {
+        currentAgent = savedAgent;
+        // Update UI to show correct agent
+        const btn = document.querySelector(`[data-agent="${savedAgent}"]`);
+        if (btn) {
+          document.querySelectorAll(".agent-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load conversation:", e);
+      conversation = [];
+    }
+  }
+
+  function newChat() {
+    if (conversation.length > 0 && !confirm("Start a new chat? Current conversation will be cleared.")) {
+      return;
+    }
+    conversation = [];
+    localStorage.removeItem(STORAGE_KEY);
+    document.getElementById("messages").innerHTML = "";
+  }
 
   function connect() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -222,10 +367,27 @@
         if (!currentMsgEl) {
           currentMsgEl = appendMessage("assistant", "");
         }
-        currentMsgEl.querySelector(".msg-body").textContent += data.chunk;
+        // Accumulate plain text chunks, we'll render markdown when done
+        const msgBody = currentMsgEl.querySelector(".msg-body");
+        if (!msgBody.dataset.rawText) {
+          msgBody.dataset.rawText = "";
+        }
+        msgBody.dataset.rawText += data.chunk;
+        // For now, show plain text while streaming
+        msgBody.textContent = msgBody.dataset.rawText;
         scrollBottom();
       }
       if (data.done) {
+        // Render the complete response as markdown
+        if (currentMsgEl) {
+          const msgBody = currentMsgEl.querySelector(".msg-body");
+          const content = msgBody.dataset.rawText || msgBody.textContent;
+          // Render markdown
+          msgBody.innerHTML = marked.parse(content);
+          // Save to conversation
+          conversation.push({role: "assistant", content: content});
+          saveConversation();
+        }
         currentMsgEl = null;
         setWaiting(false);
       }
@@ -236,15 +398,22 @@
     document.querySelectorAll(".agent-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     currentAgent = btn.dataset.agent;
+    saveConversation();  // Save agent selection
   }
 
-  function appendMessage(role, text) {
+  function appendMessage(role, text, save = true) {
     const msgs = document.getElementById("messages");
     const div = document.createElement("div");
     div.className = `message ${role}`;
+
+    // Render markdown for assistant messages, escape HTML for user messages
+    const content = role === "assistant" || role === "system"
+      ? marked.parse(text)
+      : escapeHtml(text);
+
     div.innerHTML = `
       <div class="msg-role">${role}</div>
-      <div class="msg-body">${escapeHtml(text)}</div>
+      <div class="msg-body">${content}</div>
     `;
     msgs.appendChild(div);
     scrollBottom();
@@ -252,7 +421,7 @@
   }
 
   function escapeHtml(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g, "<br>");
   }
 
   function scrollBottom() {
@@ -274,12 +443,20 @@
     if (!text || isWaiting || !ws || ws.readyState !== WebSocket.OPEN) return;
 
     appendMessage("user", text);
+    conversation.push({role: "user", content: text});
+    saveConversation();
+
     input.value = "";
     autoResize(input);
     setWaiting(true);
     currentMsgEl = null;
 
-    ws.send(JSON.stringify({ agent: currentAgent, message: text }));
+    // Send full conversation history to server for context
+    ws.send(JSON.stringify({
+      agent: currentAgent,
+      message: text,
+      conversation: conversation  // Include full history
+    }));
   }
 
   function handleKey(e) {
@@ -294,6 +471,8 @@
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }
 
+  // Load saved conversation on page load
+  loadConversation();
   connect();
 </script>
 {% endblock %}

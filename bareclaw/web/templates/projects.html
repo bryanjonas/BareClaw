@@ -174,6 +174,14 @@
       {% endfor %}
     </div>
     {% endif %}
+
+    {% if proj.bootstrap_prompt and not proj.has_runbook %}
+    <div class="sp-actions">
+      <button class="primary" onclick="bootstrapProject('{{ proj.id }}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap Runbook</button>
+      <span class="spinner" id="bootstrap-spinner-{{ proj.id }}">running…</span>
+    </div>
+    <div id="bootstrap-result-{{ proj.id }}"></div>
+    {% endif %}
   </div>
   {% endfor %}
 {% else %}
@@ -201,6 +209,33 @@ async function runTask(projectId, taskId) {
       resultEl.innerHTML = `
         <details class="task-result" open>
           <summary>result</summary>
+          <pre>${e(data.response)}</pre>
+        </details>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Request failed: ${e(String(err))}</p>`;
+  } finally {
+    spinner.classList.remove("active");
+  }
+}
+
+async function bootstrapProject(projectId) {
+  const spinner = document.getElementById("bootstrap-spinner-" + projectId);
+  const resultEl = document.getElementById("bootstrap-result-" + projectId);
+  spinner.classList.add("active");
+  resultEl.innerHTML = "";
+
+  try {
+    const resp = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/bootstrap", {
+      method: "POST",
+    });
+    const data = await resp.json();
+    if (data.error) {
+      resultEl.innerHTML = `<p style="color:#e57373;font-size:12px;">Error: ${e(data.error)}</p>`;
+    } else {
+      resultEl.innerHTML = `
+        <details class="task-result" open>
+          <summary>bootstrap result</summary>
           <pre>${e(data.response)}</pre>
         </details>`;
     }
@@ -240,6 +275,14 @@ async function refreshAll() {
         <div id="result-${key}"></div>`;
     }).join("");
 
+    const bootstrapBtn = proj.has_bootstrap
+      ? `<div class="sp-actions">
+           <button class="primary" onclick="bootstrapProject('${e(proj.id)}')" style="padding:.3rem .7rem;font-size:12px;">Bootstrap Runbook</button>
+           <span class="spinner" id="bootstrap-spinner-${e(proj.id)}">running…</span>
+         </div>
+         <div id="bootstrap-result-${e(proj.id)}"></div>`
+      : "";
+
     return `
       <div class="proj-card" id="proj-${e(proj.id)}">
         <div class="proj-card-header">
@@ -250,6 +293,7 @@ async function refreshAll() {
         ${kws ? `<div class="proj-section-label">Keywords</div><div class="keyword-list">${kws}</div>` : ""}
         ${mems ? `<div class="proj-section-label">Memories</div><div class="keyword-list">${mems}</div>` : ""}
         ${tasks ? `<div class="proj-section-label">Tasks</div><div class="task-list">${tasks}</div>` : ""}
+        ${bootstrapBtn}
       </div>`;
   }).join("");
 }

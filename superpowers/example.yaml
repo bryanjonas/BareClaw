@@ -4,7 +4,9 @@
 #
 # Superpowers give agents structured access to external services.
 # The config block (non-secret) is safe to commit.
-# Secrets live in secrets/<id>.yaml (always gitignored).
+# Secrets live in secrets/<id>.env (KEY=VALUE format, always gitignored).
+# The agent sees the secrets file path and variable names — never the values.
+# Use in run_command: source /abs/path/to/secrets/<id>.env && curl -H "Authorization: Bearer $token" ...
 
 id: my-service
 
@@ -25,7 +27,7 @@ keywords:
   - myservice
 
 # Bootstrap prompt — sent to an agent to research and document this service.
-# Use {key} placeholders for values from config and secrets/<id>.yaml.
+# Use {key} placeholders for values from config and secrets/<id>.env.
 # The agent will use run_command (curl, etc.) and write_memory to capture findings.
 # Leave empty to disable the Bootstrap button in the UI.
 bootstrap_prompt: |

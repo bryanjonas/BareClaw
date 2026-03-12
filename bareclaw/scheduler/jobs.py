@@ -1,9 +1,10 @@
 """
-Cron scheduler — loads cron YAML definitions and dispatches agent runs on schedule.
+Cron scheduler — loads cron YAML definitions and dispatches deterministic task or command jobs.
 """
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -11,7 +12,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from bareclaw import db
 from bareclaw.config import AppConfig, CronConfig
-from bareclaw.core.agent import LLMClients, run_agent
+from bareclaw.core.agent import LLMClients
+from bareclaw.core.task_runner import TaskRunError, run_project_task
 from bareclaw.executor.cli import run_command
 
 logger = logging.getLogger(__name__)
@@ -29,37 +31,24 @@ async def _run_cron_job(job: CronConfig, config: AppConfig, clients: LLMClients)
     logger.info("Running cron job: %s", job.id)
     command_output: str | None = None
 
-    # Step 1: optionally run the shell command
-    if job.command:
-        agent = config.agents.get(job.agent)
-        workspace = agent.workspace if agent else "~"
-        command_output = run_command(job.command, workspace)
-        logger.debug("Cron %s command output: %s", job.id, command_output[:200])
-
-    # Step 2: build prompt
-    prompt = job.prompt
-    if command_output:
-        prompt = f"Command output:\n```\n{command_output}\n```\n\n{prompt}"
-
-    # Step 3: run agent
-    agent = config.agents.get(job.agent)
-    if not agent:
-        logger.error("Cron job %s references unknown agent %s", job.id, job.agent)
-        await db.log_cron_run(
-            job.id, command_output,
-            f"[error] Agent '{job.agent}' not found.", "error"
-        )
-        return
-
     try:
-        response, _ = await run_agent(agent, clients, [{"role": "user", "content": prompt}])
-        status = "ok"
+        if job.command:
+            workspace = job.workspace or str(Path.home())
+            command_output = run_command(job.command, workspace, timeout=job.timeout)
+            response = command_output
+            status = "ok" if command_output.startswith("[exit code: 0]") else "error"
+        else:
+            response = await run_project_task(job.project, job.task, config, clients)
+            status = "ok"
+    except TaskRunError as exc:
+        response = f"[error] {exc}"
+        logger.error("Cron job %s task resolution failed: %s", job.id, exc)
+        status = "error"
     except Exception as exc:
         logger.exception("Cron job %s failed: %s", job.id, exc)
         response = f"[error] {exc}"
         status = "error"
 
-    # Step 4: persist
     await db.log_cron_run(job.id, command_output, response, status)
 
     # Step 5: optional Telegram notification
@@ -92,6 +81,17 @@ def create_scheduler(config: AppConfig, clients: LLMClients) -> AsyncIOScheduler
     for job in config.crons.values():
         if not job.schedule:
             logger.warning("Cron job %s has no schedule — skipping", job.id)
+            continue
+        has_task_target = bool(job.project or job.task)
+        has_command_target = bool(job.command)
+        if has_task_target and has_command_target:
+            logger.error("Cron job %s must define either project/task or command, not both", job.id)
+            continue
+        if not has_task_target and not has_command_target:
+            logger.error("Cron job %s must define either project/task or command", job.id)
+            continue
+        if has_task_target and (not job.project or not job.task):
+            logger.error("Cron job %s task target must define both project and task", job.id)
             continue
         try:
             trigger = _parse_cron_expression(job.schedule)

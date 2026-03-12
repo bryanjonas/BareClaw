@@ -120,7 +120,7 @@ async def _handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
-        response, full_msgs = await run_agent(agent, _clients, list(sess["conversation"]))
+        response, full_msgs = await run_agent(agent, _clients, list(sess["conversation"]), _config.platform_identity, _config)
     except Exception as exc:
         logger.exception("Telegram agent run failed: %s", exc)
         await update.message.reply_text(f"Error: {exc}")

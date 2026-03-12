@@ -11,3 +11,15 @@ commits = [
   "0dafcb4028f8c81cd4fa8bef9cb0f41d9f9430a5",
   "02a28b0c9fc2df3973a8951e082b684fbd73b726",
 ]
+
+[[rules]]
+id = "non-example-yaml-file"
+description = "Flag YAML files that are not named example.yaml"
+path = '''(?i)\.yaml$'''
+regex = '''(?s).+'''
+
+  [rules.allowlist]
+  description = "Allowlist example.yaml files"
+  paths = [
+    '''(^|/)example\.yaml$''',
+  ]
